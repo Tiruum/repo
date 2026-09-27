@@ -1,0 +1,587 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R.E.P.O. — трекер косметических коробок</title>
+<meta name="description" content="Отмечай, была ли косметическая коробка на уровне, и смотри шансы на следующие. Формулы из кода игры, R.E.P.O. v0.4.4.3.">
+<meta property="og:title" content="R.E.P.O. — трекер косметических коробок">
+<meta property="og:description" content="Отмечай, была ли коробка на уровне, и смотри шансы на следующие. Формулы из кода игры, v0.4.4.3.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://tiruum.github.io/repo/">
+<meta property="og:image" content="https://tiruum.github.io/repo/preview.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#1a1e26">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=Unbounded:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #1a1e26; --panel: #222733; --panel-2: #2a3040; --line: #303747;
+  --text: #e7e9ee; --muted: #8b94a5; --faint: #5f687a;
+  --primary: #e7e9ee; --primary-ink: #1a1e26; --focus: #9fb4ff;
+  --c0: #5ee08a; --c1: #3fd0f0; --c2: #e46cf5; --c3: #ffcc33;
+  --good: #5ee08a; --bad: #ff7a7a;
+  --display: "Unbounded", "Segoe UI", system-ui, sans-serif;
+  --body: "Golos Text", "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #eceef3; --panel: #ffffff; --panel-2: #f2f4f8; --line: #dde1e9;
+    --text: #1a1e26; --muted: #5d6677; --faint: #9ba3b2;
+    --primary: #1a1e26; --primary-ink: #ffffff; --focus: #3d5bd9;
+    --c0: #17a44b; --c1: #0a93b5; --c2: #b62fc9; --c3: #c28a00;
+    --good: #17a44b; --bad: #d63b3b;
+  }
+}
+* { box-sizing: border-box; }
+html { color-scheme: dark light; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 var(--body); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 8px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
+.num { font-family: var(--display); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+.r0 { --rc: var(--c0); } .r1 { --rc: var(--c1); } .r2 { --rc: var(--c2); } .r3 { --rc: var(--c3); }
+
+.wrap { max-width: 1320px; margin: 0 auto; padding: 20px 20px 28px; }
+
+/* header */
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; margin-bottom: 18px; }
+.brand { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.brand b { font-family: var(--display); font-weight: 700; font-size: 20px; letter-spacing: .01em; }
+.brand span { color: var(--muted); }
+.actions { display: flex; gap: 8px; align-items: center; }
+.btn { border: 1px solid var(--line); background: transparent; border-radius: 10px; padding: 7px 14px; cursor: pointer; transition: border-color .15s, background .15s; }
+.btn:hover { border-color: var(--muted); background: var(--panel); }
+.menu { position: relative; }
+.menu summary { list-style: none; cursor: pointer; border: 1px solid var(--line); border-radius: 10px; width: 38px; height: 36px; display: grid; place-items: center; font-size: 18px; line-height: 1; }
+.menu summary::-webkit-details-marker { display: none; }
+.menu summary:hover { border-color: var(--muted); }
+.menu .pop { position: absolute; right: 0; top: calc(100% + 6px); z-index: 5; min-width: 240px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 6px; box-shadow: 0 12px 32px rgb(0 0 0 / .35); }
+.menu .pop button { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 9px 10px; border-radius: 8px; cursor: pointer; }
+.menu .pop button:hover { background: var(--panel-2); }
+.menu .pop .danger { color: var(--bad); }
+
+/* grid */
+.grid { display: grid; gap: 16px; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); grid-template-areas: "log odds" "levels stats"; align-items: start; }
+.log { grid-area: log; } .odds { grid-area: odds; } .levels { grid-area: levels; } .stats { grid-area: stats; }
+@media (max-width: 980px) { .grid { grid-template-columns: minmax(0, 1fr); grid-template-areas: "log" "odds" "levels" "stats"; } }
+
+.panel { background: var(--panel); border-radius: 18px; padding: 20px; min-width: 0; }
+h2 { font-family: var(--display); font-weight: 500; font-size: 15px; margin: 0 0 16px; }
+
+/* log panel */
+.counters { display: flex; align-items: flex-end; gap: 28px; flex-wrap: wrap; margin-bottom: 20px; }
+.counter .k { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+.stepper { display: flex; align-items: center; gap: 6px; }
+.stepper button { width: 32px; height: 32px; border-radius: 9px; border: 1px solid var(--line); background: transparent; cursor: pointer; font-size: 17px; line-height: 1; color: var(--muted); }
+.stepper button:hover { color: var(--text); border-color: var(--muted); }
+.stepper output { min-width: 44px; text-align: center; font-size: 30px; font-weight: 700; line-height: 1; }
+.stepper small { font-family: var(--body); font-size: 12px; color: var(--muted); font-weight: 400; margin-left: 2px; }
+.chance { margin-left: auto; text-align: right; }
+.chance output { display: block; font-size: 56px; font-weight: 700; line-height: .95; letter-spacing: -.02em; }
+.chance output small { font-size: 26px; margin-left: 2px; }
+.chance span { font-size: 13px; color: var(--muted); }
+
+/* cartridges — the one loud element */
+.carts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 620px) { .carts { grid-template-columns: repeat(2, 1fr); } }
+.cart { position: relative; text-align: left; cursor: pointer; border-radius: 14px; padding: 18px 14px 14px; border: 1px solid var(--line);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--rc) 9%, var(--panel-2)), var(--panel-2) 60%);
+  transition: border-color .15s, transform .08s; overflow: hidden; }
+.cart::before { content: ""; position: absolute; left: 14px; right: 14px; top: 0; height: 4px; border-radius: 0 0 4px 4px; background: var(--rc); box-shadow: 0 0 16px 1px color-mix(in srgb, var(--rc) 70%, transparent); }
+.cart:hover { border-color: color-mix(in srgb, var(--rc) 60%, var(--line)); }
+.cart:active { transform: translateY(1px); }
+.cart:disabled { cursor: not-allowed; opacity: .38; }
+.cart .rn { display: block; font-weight: 600; font-size: 16px; color: var(--rc); }
+.cart .item { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; min-height: 2.6em; }
+.cart .pc { display: block; font-family: var(--display); font-size: 20px; margin-top: 10px; font-variant-numeric: tabular-nums; }
+.cart kbd { position: absolute; top: 12px; right: 12px; }
+.cart.pulse { animation: pulse .35s ease-out; }
+@keyframes pulse { from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--rc) 55%, transparent); } to { box-shadow: 0 0 0 10px transparent; } }
+kbd { font: 500 11px/1 var(--body); padding: 3px 5px; border-radius: 5px; border: 1px solid var(--line); color: var(--faint); background: transparent; }
+
+.commit { display: flex; align-items: center; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+.pending { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; min-height: 34px; align-items: center; }
+.chip { display: inline-flex; align-items: center; gap: 7px; padding: 6px 10px; border-radius: 999px; cursor: pointer; font-size: 13px; font-weight: 500;
+  background: color-mix(in srgb, var(--rc) 15%, transparent); border: 1px solid color-mix(in srgb, var(--rc) 45%, transparent); }
+.chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--rc); }
+.chip .x { color: var(--muted); font-size: 12px; }
+.chip:hover { border-color: var(--rc); }
+.ghost { border: 1px solid var(--line); background: transparent; border-radius: 12px; padding: 12px 18px; cursor: pointer; display: inline-flex; gap: 10px; align-items: center; }
+.ghost:hover { border-color: var(--muted); }
+.primary { border: 0; background: var(--primary); color: var(--primary-ink); border-radius: 12px; padding: 12px 20px; cursor: pointer; font-weight: 600; display: inline-flex; gap: 10px; align-items: center; }
+.primary kbd { color: inherit; border-color: currentColor; opacity: .45; }
+.primary:hover { filter: brightness(.94); }
+.ghost:disabled, .primary:disabled { opacity: .35; cursor: not-allowed; filter: none; }
+
+/* odds panel */
+.slot { display: grid; grid-template-columns: 52px minmax(0, 1fr) auto; gap: 12px; align-items: center; margin-bottom: 12px; }
+.slot .n { font-size: 13px; color: var(--muted); }
+.slot .p { font-family: var(--display); font-size: 17px; text-align: right; min-width: 64px; }
+.slot .p small { display: block; font: 12px var(--body); color: var(--muted); }
+.stack { display: flex; height: 12px; gap: 2px; border-radius: 6px; overflow: hidden; background: var(--panel-2); }
+.stack i { display: block; height: 100%; background: var(--rc); min-width: 0; transition: flex-grow .3s; }
+.rlist { list-style: none; margin: 18px 0 0; padding: 0; }
+.rlist li { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; font-size: 14px; }
+.rlist li + li { border-top: 1px solid var(--line); }
+.rlist .l { display: inline-flex; align-items: center; gap: 9px; }
+.rlist .l i { width: 8px; height: 8px; border-radius: 50%; background: var(--rc); }
+.rlist b { font-family: var(--display); font-weight: 500; font-size: 14px; font-variant-numeric: tabular-nums; }
+.ahead { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+.ahead span { display: block; font-size: 12.5px; color: var(--muted); }
+.ahead b { font-family: var(--display); font-size: 22px; font-weight: 700; }
+.ahead .rare { color: var(--c2); } .ahead .ultra { color: var(--c3); }
+
+/* levels table */
+.levels h2 { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.levels h2 span { font: 13px var(--body); color: var(--muted); }
+.tscroll { overflow-x: auto; margin: 0 -8px; }
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+th, td { padding: 7px 8px; text-align: right; white-space: nowrap; }
+th { font-weight: 500; font-size: 12.5px; color: var(--faint); }
+td { border-top: 1px solid var(--line); }
+th:first-child, td:first-child { text-align: left; }
+th:last-child, td:last-child { text-align: left; padding-left: 16px; }
+tr.future td { color: var(--muted); }
+tr.cur td { background: color-mix(in srgb, var(--primary) 7%, transparent); }
+tr.cur td:first-child { box-shadow: inset 3px 0 0 var(--primary); }
+td.dim { color: var(--faint); }
+.lvl { display: inline-flex; align-items: baseline; gap: 6px; }
+.lvl .bl { font-size: 11px; color: var(--c3); }
+.lvl .slot-new { font-size: 11px; color: var(--muted); }
+.found { display: inline-flex; align-items: center; gap: 5px; }
+.hchip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 999px; font-size: 12.5px; cursor: pointer;
+  background: color-mix(in srgb, var(--rc) 14%, transparent); border: 1px solid color-mix(in srgb, var(--rc) 40%, transparent); }
+.hchip i { width: 7px; height: 7px; border-radius: 50%; background: var(--rc); }
+.hchip:hover { border-color: var(--bad); text-decoration: line-through; }
+.hnone { color: var(--faint); font-size: 12.5px; }
+.now { font-size: 12.5px; color: var(--text); }
+.adds { display: inline-flex; gap: 3px; margin-left: 4px; opacity: 0; transition: opacity .12s; }
+tr:hover .adds, .adds:focus-within { opacity: 1; }
+@media (hover: none) { .adds { opacity: 1; } }
+.add { width: 20px; height: 20px; border-radius: 6px; padding: 0; cursor: pointer; border: 1px solid color-mix(in srgb, var(--rc) 55%, transparent); background: transparent; color: var(--rc); font-size: 13px; line-height: 1; }
+.add:hover { background: color-mix(in srgb, var(--rc) 22%, transparent); }
+.add:disabled { display: none; }
+
+/* stats */
+.totals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.totals span { display: block; font-size: 12.5px; color: var(--muted); }
+.totals b { font-family: var(--display); font-size: 26px; font-weight: 700; }
+.byr { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 14px; font-size: 14px; }
+.byr span { display: inline-flex; align-items: center; gap: 7px; }
+.byr i { width: 8px; height: 8px; border-radius: 50%; background: var(--rc); }
+.luck { margin-top: 22px; }
+.luck p { margin: 0 0 10px; font-size: 14px; }
+.meter { position: relative; height: 8px; border-radius: 4px; background: linear-gradient(90deg, color-mix(in srgb, var(--bad) 70%, transparent), var(--panel-2) 50%, color-mix(in srgb, var(--good) 70%, transparent)); }
+.meter i { position: absolute; top: -5px; width: 4px; height: 18px; border-radius: 2px; background: var(--text); transform: translateX(-50%); transition: left .3s; }
+.meter-scale { display: flex; justify-content: space-between; font-size: 12px; color: var(--faint); margin-top: 6px; }
+
+footer { margin-top: 22px; font-size: 13px; color: var(--muted); display: flex; justify-content: space-between; gap: 8px 20px; flex-wrap: wrap; }
+
+.toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; font-size: 14px; display: flex; gap: 14px; align-items: center; box-shadow: 0 12px 32px rgb(0 0 0 / .35); max-width: calc(100% - 32px); }
+.toast button { background: none; border: 0; color: var(--focus); cursor: pointer; font-weight: 600; padding: 0; }
+/* phone overrides — keep last so they win over base rules */
+@media (max-width: 620px) {
+  .wrap { padding: 14px 12px 22px; }
+  .panel { padding: 16px; border-radius: 16px; }
+  .counters { gap: 16px 22px; }
+  .chance { margin-left: 0; width: 100%; text-align: left; }
+  .chance output { font-size: 44px; }
+  .commit { display: grid; grid-template-columns: 1fr 1fr; }
+  .commit .pending { grid-column: 1 / -1; }
+  .ghost, .primary { justify-content: center; }
+  .ahead b { font-size: 18px; }
+}@media (hover: none) { kbd { display: none; } }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><b>R.E.P.O.</b><span>трекер косметических коробок</span></div>
+    <div class="actions">
+      <button class="btn" id="newRun" title="Уровень снова 1. Невезение сохраняется: в игре оно живёт до перезапуска.">Новый забег</button>
+      <button class="btn" id="restart" title="Игра перезапущена — невезение обнуляется">Перезапустил игру</button>
+      <details class="menu" id="menu">
+        <summary aria-label="Ещё действия">⋯</summary>
+        <div class="pop">
+          <button id="undo">Отменить последний уровень <kbd>Ctrl Z</kbd></button>
+          <button id="wipe" class="danger">Стереть всю историю</button>
+        </div>
+      </details>
+    </div>
+  </header>
+
+  <main class="grid">
+    <section class="panel log" aria-label="Отметка уровня">
+      <div class="counters">
+        <div class="counter">
+          <span class="k">Уровень</span>
+          <div class="stepper">
+            <button data-step="level:-1" aria-label="Уровень меньше">−</button>
+            <output class="num" id="level">1</output>
+            <button data-step="level:1" aria-label="Уровень больше">+</button>
+          </div>
+        </div>
+        <div class="counter" title="Уровней подряд без коробки. Каждый добавляет +25% к шансу.">
+          <span class="k">Невезение</span>
+          <div class="stepper">
+            <button data-step="bad:-1" aria-label="Невезение меньше">−</button>
+            <output class="num" id="bad">0</output>
+            <button data-step="bad:1" aria-label="Невезение больше">+</button>
+          </div>
+        </div>
+        <div class="chance">
+          <output class="num" id="any" aria-live="polite">—</output>
+          <span>шанс, что на уровне есть коробка</span>
+        </div>
+      </div>
+
+      <div class="carts" id="carts" role="group" aria-label="Нашёл коробку"></div>
+
+      <div class="commit">
+        <div class="pending" id="pending"></div>
+        <button class="ghost" id="nothing">Коробок не было <kbd>0</kbd></button>
+        <button class="primary" id="next">Записать уровень <kbd>Enter</kbd></button>
+      </div>
+    </section>
+
+    <aside class="panel odds" aria-label="Шансы">
+      <h2 id="oddsTitle">Шансы на уровне 1</h2>
+      <div id="slots"></div>
+      <ul class="rlist" id="rlist"></ul>
+      <div class="ahead">
+        <div><span>Коробок за 5 уровней</span><b class="num" id="fcExp">—</b></div>
+        <div><span>Хоть одна редкая+</span><b class="num rare" id="fcRare">—</b></div>
+        <div><span>Хоть одна ультра</span><b class="num ultra" id="fcUltra">—</b></div>
+      </div>
+    </aside>
+
+    <section class="panel levels" aria-label="Уровни забега">
+      <h2>Уровни забега <span id="slotHint"></span></h2>
+      <div class="tscroll" id="levels"></div>
+    </section>
+
+    <aside class="panel stats" aria-label="Статистика">
+      <h2>За всё время</h2>
+      <div class="totals">
+        <div><span>Уровней</span><b class="num" id="sLevels">0</b></div>
+        <div><span>Коробок</span><b class="num" id="sFound">0</b></div>
+        <div><span>Ожидалось</span><b class="num" id="sExp">0</b></div>
+      </div>
+      <div class="byr" id="byr"></div>
+      <div class="luck">
+        <p id="luckText">Отметь несколько уровней — здесь появится, насколько тебе везёт.</p>
+        <div class="meter"><i id="luckMark" style="left:50%"></i></div>
+        <div class="meter-scale"><span>не везёт</span><span>как положено</span><span>везёт</span></div>
+      </div>
+    </aside>
+  </main>
+
+  <footer>
+    <span>Для R.E.P.O. v0.4.4.3 (Steam build 23363152). Шансы и правила взяты из кода игры.</span>
+    <span>История хранится только в этом браузере.</span>
+  </footer>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden><span id="toastText"></span><button id="toastUndo">Отменить</button></div>
+
+<script>
+/* ===== Game rules (Assembly-CSharp.dll + level0 asset, R.E.P.O. v0.4.4.3) ===== */
+const LEVEL_LOOP = 5, LOOPS_MAX = 2, BAD_LUCK_BONUS = 25;
+const RAR = ["Обычная", "Необычная", "Редкая", "Ультра"];
+const ITEM = ["Network Adapter", "32PB RAM Cluster", "Neural Logic Core", "12x Quantum Drive Stack"];
+const WEIGHTS = [t => 0.50 - 0.20 * t, t => 0.30, t => 0.10 + 0.15 * t, t => 0.19 * t];
+
+function slotTs(level) {                       // t of every box slot on a 1-based level
+  const lc = level - 1, loops = Math.floor(lc / LEVEL_LOOP);
+  const clamped = Math.max(0, Math.min(loops, LOOPS_MAX));
+  const partial = (lc % LEVEL_LOOP) / LEVEL_LOOP;
+  return Array.from({ length: clamped + 1 }, (_, i) => i < loops ? 1 : partial);
+}
+const spawnChance = (t, bad) => Math.min(100, Math.round((0.25 + 0.40 * t) * 100) + (bad > 0 ? bad * BAD_LUCK_BONUS : 0)) / 100;
+
+const rarityCache = new Map();
+function rarityOdds(t) {                       // each rarity rolls Random(0, weight); highest wins, ties -> earlier
+  const key = t.toFixed(3);
+  if (rarityCache.has(key)) return rarityCache.get(key);
+  const n = WEIGHTS.map(w => Math.max(1, Math.round(w(t) * 100 + 1e-9)));
+  const wins = [0, 0, 0, 0];
+  for (let a = 0; a < n[0]; a++) for (let b = 0; b < n[1]; b++) for (let c = 0; c < n[2]; c++) for (let d = 0; d < n[3]; d++) {
+    let best = a, bi = 0;
+    if (b > best) { best = b; bi = 1; }
+    if (c > best) { best = c; bi = 2; }
+    if (d > best) { bi = 3; }
+    wins[bi]++;
+  }
+  const total = n[0] * n[1] * n[2] * n[3];
+  const r = wins.map(w => w / total);
+  rarityCache.set(key, r);
+  return r;
+}
+
+function levelOdds(level, bad) {               // bonus applies only until the first box spawns
+  let none = 1;
+  const slots = slotTs(level).map((t, i) => {
+    const cb = spawnChance(t, bad), c0 = spawnChance(t, 0);
+    const p = none * cb + (1 - none) * c0;
+    none *= 1 - cb;
+    return { slot: i + 1, t, chance: p, base: c0, rarity: rarityOdds(t) };
+  });
+  return { slots, any: 1 - none, expected: slots.reduce((a, s) => a + s.chance, 0) };
+}
+const atLeast = (o, pick) => { let none = 1; for (const s of o.slots) none *= 1 - s.chance * pick.reduce((a, r) => a + s.rarity[r], 0); return 1 - none; };
+
+function forecast(level, bad, h = 5) {
+  let exp = 0, noRare = 1, noUltra = 1;
+  for (let i = 0; i < h; i++) for (const s of levelOdds(level + i, i ? 0 : bad).slots) {
+    exp += s.chance; noRare *= 1 - s.chance * (s.rarity[2] + s.rarity[3]); noUltra *= 1 - s.chance * s.rarity[3];
+  }
+  return { exp, rare: 1 - noRare, ultra: 1 - noUltra };
+}
+
+/* ===== State ===== */
+const KEY = "repoBoxTracker.v1";
+const fresh = () => ({ level: 1, bad: 0, pending: [], history: [] });
+// history entry: { level, boxes: [rarity...], badBefore, expected, run: 'new'|'restart'|undefined }
+let S = load();
+let nextMark = null;           // 'new' | 'restart' marker for the next recorded level
+let lastUndo = null;
+
+function load() {
+  try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.history) return { ...fresh(), ...s }; } catch (e) {}
+  return fresh();
+}
+function save() { try { localStorage.setItem(KEY, JSON.stringify({ ...S, nextMark })); } catch (e) {} }
+try { nextMark = JSON.parse(localStorage.getItem(KEY) || "{}").nextMark || null; } catch (e) {}
+
+const snapshot = () => JSON.stringify({ S, nextMark });
+function restore(snap) { const o = JSON.parse(snap); S = o.S; nextMark = o.nextMark; save(); render(); }
+
+function toast(text, snap) {
+  lastUndo = snap;
+  $("toastText").textContent = text;
+  $("toastUndo").hidden = !snap;
+  $("toast").hidden = false;
+  clearTimeout(toast.t);
+  toast.t = setTimeout(() => { $("toast").hidden = true; }, 5000);
+}
+
+/* ===== Actions ===== */
+const maxBoxes = () => slotTs(S.level).length;
+const describe = boxes => boxes.length ? boxes.map(r => RAR[r].toLowerCase()).join(", ") : "коробок не было";
+
+function addBox(r) {
+  if (S.pending.length >= maxBoxes()) return;
+  S.pending.push(r); save(); render();
+  const el = document.querySelector(`.cart[data-add="${r}"]`);
+  if (el) { el.classList.remove("pulse"); void el.offsetWidth; el.classList.add("pulse"); }
+}
+function removeBox(i = S.pending.length - 1) { if (i < 0) return; S.pending.splice(i, 1); save(); render(); }
+
+function recordLevel(boxes) {
+  const snap = snapshot();
+  const o = levelOdds(S.level, S.bad);
+  S.history.push({ level: S.level, boxes: boxes.slice(), badBefore: S.bad, expected: o.expected, run: nextMark || undefined });
+  nextMark = null;
+  // RunManager.ChangeLevel: +1 if no box spawned; SpawnCosmeticWorldObject: reset to 0
+  S.bad = boxes.length ? 0 : S.bad + 1;
+  S.level += 1;
+  S.pending = [];
+  save(); render();
+  toast(`Уровень ${S.level - 1} записан: ${describe(boxes)}`, snap);
+}
+
+function undoLevel() {
+  const last = S.history.pop();
+  if (!last) return;
+  S.level = last.level; S.bad = last.badBefore; S.pending = last.boxes.slice(); nextMark = last.run || null;
+  save(); render();
+  toast(`Запись уровня ${last.level} отменена`, null);
+}
+
+function replayFrom(i) {
+  // recompute bad luck before each level from entry i onward (RunManager.ChangeLevel rules)
+  let bad = S.history[i].badBefore;
+  for (let j = i; j < S.history.length; j++) {
+    const h = S.history[j];
+    if (h.run === "restart" && j > i) bad = 0;
+    h.badBefore = bad;
+    h.expected = levelOdds(h.level, bad).expected;
+    bad = h.boxes.length ? 0 : bad + 1;
+  }
+  S.bad = bad;
+}
+
+function editHistory(i, change) {
+  const snap = snapshot();
+  const h = S.history[i];
+  change(h);
+  replayFrom(i);
+  save(); render();
+  toast(`Уровень ${h.level} исправлен: ${describe(h.boxes)}`, snap);
+}
+
+/* ===== Render ===== */
+const $ = id => document.getElementById(id);
+const pct = (x, d = 1) => (x * 100).toFixed(d).replace(/\.0+$/, "") + "%";
+const pctSmall = (x, d = 1) => pct(x, d).replace("%", "<small>%</small>");
+
+function currentRun() {
+  // entries since the last "new run" marker; latest entry wins if a level was replayed
+  let start = 0;
+  S.history.forEach((h, i) => { if (h.run === "new") start = i; });
+  const byLevel = new Map();
+  for (let i = start; i < S.history.length; i++) byLevel.set(S.history[i].level, i);
+  return byLevel;
+}
+
+function levelsTable() {
+  const run = currentRun();
+  const maxLevel = Math.max(16, S.level, ...run.keys());
+  const rows = [];
+  for (let lvl = 1; lvl <= maxLevel; lvl++) {
+    const idx = run.get(lvl);
+    const h = idx === undefined ? null : S.history[idx];
+    const isCur = lvl === S.level;
+    const bad = isCur ? S.bad : h ? h.badBefore : 0;
+    const o = levelOdds(lvl, bad);
+    const cells = [0, 1, 2].map(i => o.slots[i] ? `<td>${pct(o.slots[i].chance, 0)}</td>` : `<td class="dim">–</td>`).join("");
+    let found = "";
+    if (isCur) found = `<span class="now">${S.pending.length ? describe(S.pending) : "сейчас"}</span>`;
+    else if (h) {
+      const full = h.boxes.length >= o.slots.length;
+      found = `<span class="found">${h.boxes.length
+          ? h.boxes.map((r, j) => `<button class="hchip r${r}" data-hdel="${idx}:${j}" aria-label="Убрать: ${RAR[r]}"><i></i>${RAR[r]}</button>`).join("")
+          : `<span class="hnone">нет</span>`}
+        <span class="adds">${RAR.map((n, r) => `<button class="add r${r}" data-hadd="${idx}:${r}" aria-label="Добавить: ${n}" title="Добавить: ${n}" ${full ? "disabled" : ""}>+</button>`).join("")}</span></span>`;
+    }
+    const cls = [isCur ? "cur" : "", !isCur && !h ? "future" : ""].join(" ");
+    const tags = (bad ? `<span class="bl" title="Бонус невезения">+${bad * BAD_LUCK_BONUS}%</span>` : "")
+               + (lvl === 6 || lvl === 11 ? `<span class="slot-new" title="Открывается новый слот">+слот</span>` : "");
+    rows.push(`<tr class="${cls}"><td><span class="lvl">${lvl}${tags}</span></td>${cells}
+      <td>${o.expected.toFixed(2)}</td><td>${pct(o.any)}</td><td>${pct(atLeast(o, [2, 3]))}</td><td>${pct(atLeast(o, [3]), 2)}</td><td>${found}</td></tr>`);
+  }
+  return `<table><thead><tr><th>Уровень</th><th>Слот 1</th><th>Слот 2</th><th>Слот 3</th><th>Коробок</th><th>Хоть одна</th><th>Редкая+</th><th>Ультра</th><th>Нашёл</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
+}
+
+function render() {
+  const o = levelOdds(S.level, S.bad);
+  const mb = maxBoxes();
+  $("level").textContent = S.level;
+  $("bad").innerHTML = S.bad + (S.bad ? `<small>+${S.bad * BAD_LUCK_BONUS}%</small>` : "");
+  $("any").innerHTML = pctSmall(o.any);
+
+  const r1 = o.slots[0].rarity;
+  $("carts").innerHTML = RAR.map((name, i) => `
+    <button class="cart r${i}" data-add="${i}" ${S.pending.length >= mb ? "disabled" : ""} aria-label="${name}: ${ITEM[i]}">
+      <kbd>${i + 1}</kbd><span class="rn">${name}</span><span class="item">${ITEM[i]}</span><span class="pc">${pct(r1[i], r1[i] < 0.01 ? 2 : 1)}</span>
+    </button>`).join("");
+  $("pending").innerHTML = S.pending.map((r, i) =>
+    `<button class="chip r${r}" data-del="${i}" aria-label="Убрать: ${RAR[r]}"><i></i>${RAR[r]}<span class="x">✕</span></button>`).join("")
+    + (mb > 1 && S.pending.length < mb ? `<span class="muted" style="font-size:13px">${S.pending.length ? "можно ещё " + (mb - S.pending.length) : "до " + mb + " коробок на уровне"}</span>` : "");
+  $("nothing").disabled = S.pending.length > 0;
+  $("next").disabled = S.pending.length === 0;
+
+  $("oddsTitle").textContent = `Шансы на уровне ${S.level}`;
+  $("slots").innerHTML = o.slots.map(s => `
+    <div class="slot">
+      <span class="n">Слот ${s.slot}</span>
+      <div class="stack" title="Редкость коробки в этом слоте">${s.rarity.map((p, i) => `<i class="r${i}" style="flex-grow:${p}" title="${RAR[i]}: ${pct(p, 2)}"></i>`).join("")}</div>
+      <span class="p">${pct(s.chance)}${Math.abs(s.chance - s.base) > 1e-9 ? `<small>без невезения ${pct(s.base)}</small>` : ""}</span>
+    </div>`).join("");
+  $("rlist").innerHTML = RAR.map((name, i) =>
+    `<li class="r${i}"><span class="l"><i></i>${name}</span><b>${pct(atLeast(o, [i]), 2)}</b></li>`).join("");
+  const f = forecast(S.level, S.bad);
+  $("fcExp").textContent = f.exp.toFixed(1);
+  $("fcRare").textContent = pct(f.rare, 0);
+  $("fcUltra").textContent = pct(f.ultra, 0);
+
+  const loops = Math.floor((S.level - 1) / LEVEL_LOOP);
+  const maxAt = LEVEL_LOOP * (LOOPS_MAX + 1) + 1;
+  $("slotHint").textContent = loops < LOOPS_MAX ? `следующий слот на ${LEVEL_LOOP * (loops + 1) + 1}-м`
+    : S.level < maxAt ? `максимум шансов с ${maxAt}-го` : "все слоты на максимуме";
+  $("levels").innerHTML = levelsTable();
+
+  const found = S.history.reduce((a, h) => a + h.boxes.length, 0);
+  const exp = S.history.reduce((a, h) => a + (h.expected || 0), 0);
+  $("sLevels").textContent = S.history.length;
+  $("sFound").textContent = found;
+  $("sExp").textContent = exp.toFixed(1);
+  const byR = [0, 0, 0, 0]; S.history.forEach(h => h.boxes.forEach(r => byR[r]++));
+  $("byr").innerHTML = RAR.map((n, i) => `<span class="r${i}"><i></i>${n} ${byR[i]}</span>`).join("");
+  // luck: found vs expected on a log scale, x0.25 .. x4, middle = as expected
+  const ratio = exp > 0 ? found / exp : 1;
+  const pos = exp > 0 ? Math.min(1, Math.max(0, 0.5 + Math.log2(Math.max(ratio, 0.25)) / 4)) : 0.5;
+  $("luckMark").style.left = (pos * 100) + "%";
+  $("luckText").textContent = exp > 0.5
+    ? `Нашёл ${found} при ожидаемых ${exp.toFixed(1)}: ${ratio >= 1.15 ? "везёт" : ratio <= 0.85 ? "не везёт" : "в пределах нормы"} (×${ratio.toFixed(2)}).`
+    : "Отметь несколько уровней — здесь появится, насколько тебе везёт.";
+}
+
+/* ===== Events ===== */
+document.addEventListener("click", e => {
+  const menu = $("menu");
+  if (menu.open && !e.target.closest("#menu")) menu.open = false;
+  const t = e.target.closest("[data-add],[data-del],[data-step],[data-hadd],[data-hdel]");
+  if (!t) return;
+  if (t.dataset.add) addBox(+t.dataset.add);
+  else if (t.dataset.del) removeBox(+t.dataset.del);
+  else if (t.dataset.hadd) {
+    const [i, r] = t.dataset.hadd.split(":").map(Number);
+    if (S.history[i].boxes.length < slotTs(S.history[i].level).length) editHistory(i, h => h.boxes.push(r));
+  }
+  else if (t.dataset.hdel) {
+    const [i, j] = t.dataset.hdel.split(":").map(Number);
+    editHistory(i, h => h.boxes.splice(j, 1));
+  }
+  else if (t.dataset.step) {
+    const [k, d] = t.dataset.step.split(":");
+    if (k === "level") { S.level = Math.max(1, S.level + +d); S.pending = S.pending.slice(0, maxBoxes()); }
+    else S.bad = Math.max(0, S.bad + +d);
+    save(); render();
+  }
+});
+$("nothing").addEventListener("click", () => recordLevel([]));
+$("next").addEventListener("click", () => { if (S.pending.length) recordLevel(S.pending); });
+$("undo").addEventListener("click", () => { $("menu").open = false; undoLevel(); });
+$("newRun").addEventListener("click", () => {
+  const snap = snapshot();
+  S.level = 1; S.pending = []; nextMark = "new"; save(); render();
+  toast("Новый забег начат, невезение сохранено", snap);
+});
+$("restart").addEventListener("click", () => {
+  const snap = snapshot();
+  S.bad = 0; nextMark = "restart"; save(); render();
+  toast("Невезение обнулено", snap);
+});
+$("wipe").addEventListener("click", () => {
+  $("menu").open = false;
+  const snap = snapshot();
+  S = fresh(); nextMark = null; save(); render();
+  toast("История стёрта", snap);
+});
+$("toastUndo").addEventListener("click", () => { if (lastUndo) restore(lastUndo); lastUndo = null; $("toast").hidden = true; });
+
+document.addEventListener("keydown", e => {
+  if (e.target.closest("input, textarea, summary")) return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); undoLevel(); return; }
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === "Escape") { $("menu").open = false; $("toast").hidden = true; return; }
+  if (["1", "2", "3", "4"].includes(e.key)) addBox(+e.key - 1);
+  else if (e.key === "0") { if (!S.pending.length) recordLevel([]); }
+  else if (e.key === "Enter") {
+    // keep Enter for keyboard-focused controls other than the rarity buttons
+    if (e.target.closest(".menu, .btn, .stepper, .levels, .chip, .ghost, #toast")) return;
+    e.preventDefault(); if (S.pending.length) recordLevel(S.pending);
+  }
+  else if (e.key === "Backspace") { e.preventDefault(); removeBox(); }
+});
+
+render();
+</script>
+</body>
+</html>
