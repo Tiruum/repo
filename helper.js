@@ -25,6 +25,7 @@ const iconSvg = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
 /* ----- hooks into app.js ----- */
 extra = { get: () => H, set: h => { if (h) { H = h; saveH(); } } };
 inLevel = () => mode() === "level";
+keysBlocked = () => mode() === "shop";
 onRecorded = boxes => { if (inLevel()) { RUN.endLevel(H.run, boxes, now()); saveH(); } };
 afterRender = () => renderHelper();
 
@@ -180,8 +181,9 @@ $("startLevel").addEventListener("click", startLevel);
 $("extract").addEventListener("click", extractionsDone);
 $("sound").addEventListener("click", toggleSound);
 $("groups").addEventListener("change", e => { H.settings.groups = e.target.checked; saveH(); render(); });
-// After a mouse click, drop focus from the button so Enter means "level done" again, not "press this button".
+// After a mouse click (not keyboard activation), drop focus from the button so Enter means "level done" again, not "press this button".
 document.addEventListener("click", e => {
+  if (e.detail === 0) return;
   const a = document.activeElement;
   if (a && a !== document.body && a.matches("button") && !a.closest("dialog, .menu")) a.blur();
 });

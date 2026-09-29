@@ -21,6 +21,7 @@ try { nextMark = JSON.parse(localStorage.getItem(KEY) || "{}").nextMark || null;
 let onRecorded = boxes => {};          // helper: finish the running level
 let inLevel = () => false;             // helper: a level is running
 let afterRender = () => {};            // helper: render its panels
+let keysBlocked = () => false;   // helper: box keys off while the box panel is hidden
 let extra = { get: () => null, set: v => {} };   // helper state inside undo snapshots
 
 const UNDO_MAX = 20, undoStack = [];
@@ -258,6 +259,7 @@ document.addEventListener("keydown", e => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); if (undo()) toast("Действие отменено", undoStack.length > 0); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key === "Escape") { $("menu").open = false; $("toast").hidden = true; return; }
+  if (keysBlocked()) return;
   if (["1", "2", "3", "4"].includes(e.key)) addBox(+e.key - 1);
   else if (e.key === "0") { if (!S.pending.length) recordLevel([]); }
   else if (e.key === "Enter") {
