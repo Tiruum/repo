@@ -127,3 +127,38 @@ test("extractions done clamps a window that has >30 s left on its end; second ca
   assert.equal(e.end, x + 30000);
   assert.equal(run.level.extractionsAt, x);
 });
+
+test("cancel kill restores the enemy exactly as before the kill", () => {
+  const run = levelWith(3, "robe"), e = run.level.enemies[0];
+  RUN.kill(run, e.uid, T0 + MIN);
+  RUN.kill(run, e.uid, e.end);                              // second kill: kills 2, orbs 2
+  const before = { killedAt: e.killedAt, start: e.start, end: e.end, coef: e.coef };
+  RUN.kill(run, e.uid, e.end + MIN);                        // misclick
+  assert.ok(RUN.cancelKill(run, e.uid));
+  assert.deepEqual({ killedAt: e.killedAt, start: e.start, end: e.end, coef: e.coef }, before);
+  assert.equal(e.kills, 2);
+  assert.equal(e.orbs, 2);
+  assert.equal(RUN.cancelKill(run, e.uid), false);          // only the last kill can be cancelled
+});
+
+test("cancelling the first kill makes the enemy alive again", () => {
+  const run = levelWith(3, "robe"), e = run.level.enemies[0];
+  RUN.kill(run, e.uid, T0 + MIN);
+  assert.ok(RUN.cancelKill(run, e.uid));
+  assert.equal(RUN.status(e, T0 + MIN), "alive");
+  assert.equal(e.kills, 0);
+  assert.equal(e.orbs, 0);
+});
+
+test("respawned early ends the cooldown now and keeps the kill", () => {
+  const run = levelWith(3, "robe"), e = run.level.enemies[0];
+  RUN.kill(run, e.uid, T0 + MIN);
+  const t = T0 + 2 * MIN;
+  assert.ok(RUN.respawned(run, e.uid, t));
+  assert.equal(RUN.status(e, t), "back");
+  assert.equal(e.seen, true);                                // UI: no "respawning" beep for this one
+  assert.equal(e.kills, 1);
+  assert.equal(e.orbs, 1);
+  assert.equal(RUN.respawned(run, e.uid, t), false);        // already back
+  assert.ok(RUN.kill(run, e.uid, t + 1000));                // can be killed again at once
+});

@@ -46,8 +46,26 @@ const RUN = (() => {
     const lv = run.level;
     const coef = lv.extractionsAt !== null ? 0 : R.respawnCoef(levelSec(run, now));
     const w = R.respawnWindow(coef);
+    const prev = { killedAt: e.killedAt, start: e.start, end: e.end, coef: e.coef, kills: e.kills, orbs: e.orbs };
     Object.assign(e, { killedAt: now, coef, start: now + Math.round(w.min * 1000), end: now + Math.round(w.max * 1000),
-      kills: e.kills + 1, orbs: Math.min(R.ORBS_MAX, e.orbs + 1) });
+      kills: e.kills + 1, orbs: Math.min(R.ORBS_MAX, e.orbs + 1), seen: false, prev });
+    return true;
+  }
+
+  // Misclick: put the enemy back exactly as it was before its last kill.
+  function cancelKill(run, uid) {
+    const e = find(run, uid);
+    if (!e || !e.prev) return false;
+    Object.assign(e, e.prev, { prev: null });
+    return true;
+  }
+
+  // Seen on the map before its window ended: the cooldown is over now; the kill and its orb stay.
+  function respawned(run, uid, now) {
+    const e = find(run, uid);
+    const st = e && status(e, now);
+    if (st !== "cooldown" && st !== "window") return false;
+    Object.assign(e, { start: now, end: now, seen: true, prev: null });
     return true;
   }
 
@@ -92,6 +110,6 @@ const RUN = (() => {
     };
   }
 
-  return { newRun, startLevel, levelSec, addPick, removeEnemy, kill, extractionsDone, status, endLevel, endRun, seenCounts, summary };
+  return { newRun, startLevel, levelSec, addPick, removeEnemy, kill, cancelKill, respawned, extractionsDone, status, endLevel, endRun, seenCounts, summary };
 })();
 if (typeof module === "object") module.exports = RUN;

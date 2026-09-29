@@ -1,11 +1,11 @@
 /* ===== REPO helper: run mode UI. Needs rules.js, enemies.js, run.js, app.js (loaded before). ===== */
-const { ENEMIES, enemyPool, oneShot, setupLabel } = ENEMY_DATA;
+const { ENEMIES, enemyPool, setupLabel } = ENEMY_DATA;
 const HKEY = "repoHelper.v1";
 const BASE_TITLE = document.title;
 const freshH = () => ({ settings: { sound: true, groups: false }, run: null, runs: [] });
 let H = loadH();
 let lastTick = Date.now();
-let numbered = [];                      // uid per on-screen number 1..9 (Shift+N = killed)
+let numbered = [];                      // uid per on-screen number 1..9 (Shift+N = killed / back)
 
 function loadH() {
   try { const h = JSON.parse(localStorage.getItem(HKEY)); if (h && h.settings) return { ...freshH(), ...h }; } catch (e) {}
@@ -165,21 +165,22 @@ function renderLevel() {
     return `<div class="tier t${t}"><div class="th"><b>${"★".repeat(t)}</b><span>${counts[t - 1] ? `${used} из ${counts[t - 1]}` : "на этом уровне нет"}</span></div>
       ${cards || adds ? `<div class="cards">${cards}${adds}</div>` : ""}</div>`;
   }).join("");
-  $("mobsHint").textContent = numbered.length ? "Shift+номер — убит" : "";
+  $("mobsHint").textContent = numbered.length ? "Shift+номер — убит / появился" : "";
   renderLoot();
 }
 
 function card(e, n) {
   const d = ENEMIES[e.id];
   return `<article class="mob t${d.tier}" data-uid="${e.uid}" data-st="alive">
-    <div class="mh"><span class="ic">${iconSvg(d)}</span><b>${d.name}</b>${n <= 9 ? `<kbd title="Shift+${n}: убит">⇧${n}</kbd>` : ""}</div>
+    <div class="mh"><span class="ic">${iconSvg(d)}</span><b>${d.name}</b>${n <= 9 ? `<kbd title="Shift+${n}: убит / появился">⇧${n}</kbd>` : ""}</div>
     <div class="ms"><span>HP <b class="num">${d.hp}</b></span>
-      <span title="${d.dmg.length ? "урон по игроку за удар" : "урон зависит от атаки"}">урон <b class="num">${d.dmg.length ? d.dmg.join(" / ") : "—"}</b></span>
-      ${oneShot(d) ? `<span class="one">убивает с удара</span>` : ""}</div>
+      <span title="${d.dmg.length ? "урон по игроку за удар" : "урон зависит от атаки"}">урон <b class="num">${d.dmg.length ? d.dmg.join(" / ") : "—"}</b></span></div>
     ${d.desc ? `<p class="md">${d.desc}</p>` : ""}
     <div class="mt" data-timer="${e.uid}"></div>
     <div class="ma"><button class="kill" data-kill="${e.uid}">Убит</button>
-      <span class="orbs" title="Орбов выпало с этого моба, максимум ${RULES.ORBS_MAX} за уровень">${e.orbs >= RULES.ORBS_MAX ? "орбов больше не будет" : `орбы ${e.orbs}/${RULES.ORBS_MAX}`}</span>
+      <button class="kill" data-back="${e.uid}" title="Уже на карте, раньше окна">Появился</button>
+      <button class="undo-kill" data-cancel="${e.uid}" title="Отметил убийство по ошибке">Отмена</button>
+      <span class="orbs" title="Орбов выпало с этого моба, максимум ${RULES.ORBS_MAX} за уровень">${e.orbs >= RULES.ORBS_MAX ? `орбы ${RULES.ORBS_MAX}/${RULES.ORBS_MAX} · всё` : `орбы ${e.orbs}/${RULES.ORBS_MAX}`}</span>
       <button class="rm" data-rm="${e.uid}" aria-label="Убрать ${d.name}">Убрать</button></div>
   </article>`;
 }
@@ -203,11 +204,10 @@ function tickEnemies(t) {
       box.dataset.st = st;
       const tm = box.querySelector(".mt"), html = timerText(e, st, t);
       if (tm.innerHTML !== html) tm.innerHTML = html;
-      box.querySelector(".kill").disabled = st === "cooldown";
     }
     if (e.start !== null) {
       if (lastTick < e.start - 10000 && e.start - 10000 <= t && e.start - e.killedAt > 10000) beep(880, 0.12, 1);
-      if (lastTick < e.start && e.start <= t) beep(1175, 0.18, 2);
+      if (lastTick < e.start && e.start <= t && !e.seen) beep(1175, 0.18, 2);
     }
     if (st === "cooldown" && (!nearest || e.start < nearest.start)) nearest = e;
   }
@@ -234,6 +234,21 @@ function killEnemy(uid) {
   remember();
   if (!RUN.kill(H.run, uid, now())) { undoStack.pop(); return; }
   saveH(); render();
+}
+function respawnEnemy(uid) {
+  remember();
+  if (!RUN.respawned(H.run, uid, now())) { undoStack.pop(); return; }
+  saveH(); render();
+}
+function cancelKillH(uid) {
+  remember();
+  if (!RUN.cancelKill(H.run, uid)) { undoStack.pop(); return; }
+  saveH(); render();
+}
+// Shift+N: the card's main button — "Убит" while it may be on the map, "Появился" while it is away.
+function mobAction(uid) {
+  const e = H.run.level.enemies.find(x => x.uid === uid), st = e && RUN.status(e, now());
+  if (st === "cooldown" || st === "window") respawnEnemy(uid); else killEnemy(uid);
 }
 function removeEnemyH(uid) { remember(); RUN.removeEnemy(H.run, uid); saveH(); render(); }
 
@@ -290,11 +305,13 @@ document.addEventListener("click", e => {
   if (a && a !== document.body && a.matches("button") && !a.closest("dialog, .menu")) a.blur();
 });
 document.addEventListener("click", e => {
-  const t = e.target.closest("[data-open],[data-pick],[data-kill],[data-rm]");
+  const t = e.target.closest("[data-open],[data-pick],[data-kill],[data-back],[data-cancel],[data-rm]");
   if (!t) return;
   if (t.dataset.open) openPicker(+t.dataset.open);
   else if (t.dataset.pick) pickSetup(t.dataset.pick);
   else if (t.dataset.kill) killEnemy(+t.dataset.kill);
+  else if (t.dataset.back) respawnEnemy(+t.dataset.back);
+  else if (t.dataset.cancel) cancelKillH(+t.dataset.cancel);
   else if (t.dataset.rm) removeEnemyH(+t.dataset.rm);
 });
 $("pickerClose").addEventListener("click", () => $("picker").close());
@@ -302,7 +319,7 @@ document.addEventListener("keydown", e => {
   if (e.target.closest("input:not([type=checkbox]), textarea, summary, dialog") || document.querySelector("dialog[open]") || e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.shiftKey) {
     const m = /^Digit([1-9])$/.exec(e.code);
-    if (m && inLevel() && numbered[+m[1] - 1]) { e.preventDefault(); killEnemy(numbered[+m[1] - 1]); }
+    if (m && inLevel() && numbered[+m[1] - 1]) { e.preventDefault(); mobAction(numbered[+m[1] - 1]); }
     return;
   }
   if (e.code === "KeyS") startLevel();

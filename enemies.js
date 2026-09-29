@@ -70,17 +70,17 @@ const ENEMY_DATA = (() => {
       desc: "Стреляет лучом и бьёт ногой.",
       icon: '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="13" r="2"/><path d="M9 9h.01M15 9h.01M2 9h3M19 9h3"/>' },
     huntsman: { name: "Huntsman", tier: 3, hp: 250, dmg: [100],
-      desc: "Слепой, стреляет на звук и убивает с выстрела. Замри и не шуми.",
+      desc: "Слепой, стреляет на звук. Замри и не шуми.",
       icon: '<circle cx="12" cy="12" r="7"/><path d="M12 2v5M12 17v5M2 12h5M17 12h5"/>' },
     robe: { name: "Robe", tier: 3, hp: 250, dmg: [100],
-      desc: "Преследует и убивает с удара. Держи дистанцию.",
+      desc: "Преследует игрока. Держи дистанцию.",
       icon: '<path d="M12 3c-5 0-7 5-7 9v9h14v-9c0-4-2-9-7-9z"/><path d="M10 11h.01M14 11h.01"/>' },
     cleanup: { name: "Cleanup Crew", tier: 3, hp: 350, dmg: [20], desc: "",
       icon: '<path d="M14 3 8 15M5 15h8l-2 6H3z"/>' },
     loom: { name: "Loom", tier: 3, hp: 500, dmg: [100], desc: "",
       icon: '<path d="M4 21c0-9 3-17 8-17s8 8 8 17M8 21c0-6 2-10 4-10s4 4 4 10"/>' },
     trudge: { name: "Trudge", tier: 3, hp: 500, dmg: [20, 35, 100],
-      desc: "Медленный, притягивает к себе. Удар булавой убивает.",
+      desc: "Медленный, притягивает к себе и бьёт булавой.",
       icon: '<path d="M4 20 13 11"/><circle cx="16" cy="8" r="4"/><path d="M16 2v2M22 8h-2M20.2 3.8l-1.4 1.4"/>' },
   };
 
@@ -105,11 +105,10 @@ const ENEMY_DATA = (() => {
       && (!s.minLevel || level >= s.minLevel)
       && (!s.group || (groupsAllowed && level <= GROUP_MAX_LEVEL)));
   }
-  const oneShot = e => e.dmg.some(d => d >= 100);
   function setupLabel(s) {
     const [[id, n]] = s.members, name = ENEMIES[id].name;
     return s.group ? `Группа: ${n} × ${name}` : n > 1 ? `${name} ×${n}` : name;
   }
-  return { ENEMIES, SETUPS, enemyPool, oneShot, setupLabel };
+  return { ENEMIES, SETUPS, enemyPool, setupLabel };
 })();
 if (typeof module === "object") module.exports = ENEMY_DATA;

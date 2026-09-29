@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { ENEMIES, SETUPS, enemyPool, oneShot, setupLabel } = require("../enemies.js");
+const { ENEMIES, SETUPS, enemyPool, setupLabel } = require("../enemies.js");
 
 test("every enemy is complete", () => {
   assert.equal(Object.keys(ENEMIES).length, 29);
@@ -38,7 +38,3 @@ test("gnomes and bangers come in packs", () => {
   assert.equal(setupLabel(SETUPS.find(s => s.id === "robe")), "Robe");
 });
 
-test("one-shot enemies", () => {
-  const ones = Object.entries(ENEMIES).filter(([, e]) => oneShot(e)).map(([id]) => id).sort();
-  assert.deepEqual(ones, ["huntsman", "loom", "robe", "trudge"]);
-});

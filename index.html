@@ -265,7 +265,8 @@ body.has-summary[data-mode="idle"] .grid { grid-template-areas: "summary summary
 .th span { font-size: 13px; color: var(--muted); }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
 .mob { border-radius: 14px; padding: 12px; background: var(--panel-2); border: 1px solid color-mix(in srgb, var(--tc) 35%, transparent); display: flex; flex-direction: column; gap: 6px; }
-.mob[data-st="cooldown"] { opacity: .72; border-style: dashed; }
+.mob[data-st="cooldown"] { border-style: dashed; }
+.mob[data-st="cooldown"] > :not(.ma) { opacity: .6; }
 .mob[data-st="window"] { border-color: var(--t2); box-shadow: 0 0 0 1px var(--t2); }
 .mob[data-st="back"] { border-color: var(--tc); }
 .mh { display: flex; align-items: center; gap: 8px; }
@@ -274,7 +275,6 @@ body.has-summary[data-mode="idle"] .grid { grid-template-areas: "summary summary
 .mh b { font-weight: 600; flex: 1; }
 .ms { display: flex; gap: 12px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
 .ms b { color: var(--text); font-size: 14px; }
-.one { color: var(--alarm); font-weight: 600; }
 .md { margin: 0; font-size: 13px; color: var(--muted); }
 .mt { font-size: 13.5px; min-height: 0; }
 .mt:empty { display: none; }
@@ -283,10 +283,13 @@ body.has-summary[data-mode="idle"] .grid { grid-template-areas: "summary summary
 .mt .back { color: var(--tc); font-weight: 600; }
 .mt .bar { display: block; height: 5px; border-radius: 3px; background: var(--line); margin-top: 5px; overflow: hidden; }
 .mt .bar i { display: block; height: 100%; background: var(--t2); }
-.ma { display: flex; align-items: center; gap: 8px; margin-top: auto; }
+.ma { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: auto; }
 .kill { border: 0; border-radius: 9px; padding: 7px 14px; background: var(--primary); color: var(--primary-ink); font-weight: 600; cursor: pointer; }
-.kill:disabled { opacity: .35; cursor: default; }
-.orbs { font-size: 12.5px; color: var(--muted); flex: 1; }
+.mob:is([data-st="cooldown"], [data-st="window"]) [data-kill],
+.mob:not([data-st="cooldown"]):not([data-st="window"]) :is([data-back], [data-cancel]) { display: none; }
+.undo-kill { border: 1px solid var(--line); background: transparent; border-radius: 9px; padding: 6px 10px; cursor: pointer; color: var(--muted); }
+.undo-kill:hover { border-color: var(--muted); color: var(--text); }
+.orbs { font-size: 12.5px; color: var(--muted); flex: 1; white-space: nowrap; }
 .rm { border: 0; background: none; color: var(--faint); cursor: pointer; font-size: 12.5px; padding: 4px; }
 .rm:hover { color: var(--bad); }
 .slot-add { border: 1px dashed color-mix(in srgb, var(--tc) 55%, transparent); background: transparent; color: var(--tc); border-radius: 14px; min-height: 96px; cursor: pointer; font-weight: 500; }
