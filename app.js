@@ -21,15 +21,16 @@ try { nextMark = JSON.parse(localStorage.getItem(KEY) || "{}").nextMark || null;
 let onRecorded = boxes => {};          // helper: finish the running level
 let inLevel = () => false;             // helper: a level is running
 let afterRender = () => {};            // helper: render its panels
+let onWipe = () => {};                 // helper: reset its own state too
 let keysBlocked = () => false;   // helper: box keys off while the box panel is hidden
 let extra = { get: () => null, set: v => {} };   // helper state inside undo snapshots
 
 const UNDO_MAX = 20, undoStack = [];
 const snapshot = () => JSON.stringify({ S, nextMark, x: extra.get() });
-function remember() { undoStack.push(snapshot()); if (undoStack.length > UNDO_MAX) undoStack.shift(); }
+function remember() { $("toast").hidden = true; undoStack.push(snapshot()); if (undoStack.length > UNDO_MAX) undoStack.shift(); }
 function undo() {
   const snap = undoStack.pop();
-  if (!snap) return false;
+  if (!snap) { toast("Нечего отменять", false); return false; }
   const o = JSON.parse(snap);
   S = o.S; nextMark = o.nextMark; extra.set(o.x);
   save(); render();
@@ -39,6 +40,7 @@ function undo() {
 function toast(text, undoable) {
   $("toastText").textContent = text;
   $("toastUndo").hidden = !undoable;
+  toast.depth = undoable ? undoStack.length : -1;
   $("toast").hidden = false;
   clearTimeout(toast.t);
   toast.t = setTimeout(() => { $("toast").hidden = true; }, 5000);
@@ -242,7 +244,7 @@ $("restart").addEventListener("click", () => {
 $("wipe").addEventListener("click", () => {
   $("menu").open = false;
   remember();
-  S = fresh(); nextMark = null; save(); render();
+  S = fresh(); nextMark = null; save(); onWipe(); render();
   toast("История стёрта", true);
 });
 $("theme").addEventListener("click", () => {
@@ -252,16 +254,16 @@ $("theme").addEventListener("click", () => {
   toast(`Тема: ${THEME_NAME[theme]}`, null);
 });
 matchMedia("(prefers-color-scheme: light)").addEventListener("change", () => { if (theme === "system") applyTheme(); });
-$("toastUndo").addEventListener("click", () => { undo(); $("toast").hidden = true; });
+$("toastUndo").addEventListener("click", () => { if (undoStack.length === toast.depth) undo(); $("toast").hidden = true; });
 
 document.addEventListener("keydown", e => {
-  if (e.target.closest("input, textarea, summary, dialog")) return;
+  if (e.target.closest("input:not([type=checkbox]), textarea, summary, dialog")) return;
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); if (undo()) toast("Действие отменено", undoStack.length > 0); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key === "Escape") { $("menu").open = false; $("toast").hidden = true; return; }
   if (keysBlocked()) return;
-  if (["1", "2", "3", "4"].includes(e.key)) addBox(+e.key - 1);
-  else if (e.key === "0") { if (!S.pending.length) recordLevel([]); }
+  if (!e.shiftKey && ["1", "2", "3", "4"].includes(e.key)) addBox(+e.key - 1);
+  else if (!e.shiftKey && e.key === "0") { if (!S.pending.length) recordLevel([]); }
   else if (e.key === "Enter") {
     // keep Enter for keyboard-focused controls other than the rarity buttons
     if (e.target.closest(".menu, .btn, .stepper, .levels, .chip, .ghost, .mobs, .lvlp, #toast")) return;

@@ -23,7 +23,8 @@ const range = (a, b) => { const x = clock(Math.ceil(a)), y = clock(Math.ceil(b))
 const iconSvg = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d.icon}</svg>`;
 
 /* ----- hooks into app.js ----- */
-extra = { get: () => H, set: h => { if (h) { H = h; saveH(); } } };
+extra = { get: () => H, set: h => { if (h) { H = { ...h, settings: H.settings }; saveH(); } } };
+onWipe = () => { H = freshH(); saveH(); };
 inLevel = () => mode() === "level";
 keysBlocked = () => mode() === "shop" || !!document.querySelector("dialog[open]");
 onRecorded = boxes => { if (inLevel()) { RUN.endLevel(H.run, boxes, now()); saveH(); } };
@@ -31,7 +32,9 @@ afterRender = () => renderHelper();
 
 /* ----- sound: Web Audio beeps, no files ----- */
 let actx = null;
-document.addEventListener("pointerdown", () => { try { actx = actx || new AudioContext(); actx.resume(); } catch (e) {} }, { once: true });
+const unlockAudio = () => { try { actx = actx || new AudioContext(); actx.resume(); } catch (e) {} };
+document.addEventListener("pointerdown", unlockAudio, { once: true });
+document.addEventListener("keydown", unlockAudio, { once: true });
 function beep(freq = 880, dur = 0.12, n = 1) {
   if (!H.settings.sound) return;
   try {
@@ -69,7 +72,7 @@ function newRunH() {
 function endRunH() {
   if (!H.run) return;
   remember();
-  finishRun(); saveH(); render();
+  finishRun(); S.pending = []; save(); saveH(); render();
   toast("Забег окончен", true);
 }
 function startLevel() {
@@ -108,6 +111,7 @@ function renderHelper() {
   $("next").innerHTML = m === "level" ? "Уровень пройден <kbd>Enter</kbd>" : "Записать уровень <kbd>Enter</kbd>";
   if (m === "level") $("next").disabled = false;
   $("nothing").hidden = m === "level";
+  document.querySelectorAll('#logP [data-step^="level"]').forEach(b => { b.disabled = m === "level"; });
   if (m === "shop") renderShop();
   if (m === "level") renderLevel();
   if (m === "idle" && last) renderSummary(last);
@@ -135,7 +139,7 @@ $("pointGoal").addEventListener("input", e => {
 
 function renderShop() {
   const L = S.level, c = RULES.enemyCounts(L), f = RULES.firstSpawn(L);
-  $("shopTitle").textContent = `Дальше уровень ${L}`;
+  $("shopTitle").innerHTML = `Дальше уровень <span class="stepper"><button data-step="level:-1" aria-label="Уровень меньше">−</button><output class="num">${L}</output><button data-step="level:1" aria-label="Уровень больше">+</button></span>`;
   $("startLevel").innerHTML = `Начать уровень ${L} <kbd>S</kbd>`;
   $("groups").checked = H.settings.groups;
   $("shopForecast").innerHTML = `
@@ -175,7 +179,7 @@ function card(e, n) {
     ${d.desc ? `<p class="md">${d.desc}</p>` : ""}
     <div class="mt" data-timer="${e.uid}"></div>
     <div class="ma"><button class="kill" data-kill="${e.uid}">Убит</button>
-      <span class="orbs" title="Орбов выпало с этого моба, максимум 3 за уровень">орбы ${e.orbs}/3</span>
+      <span class="orbs" title="Орбов выпало с этого моба, максимум ${RULES.ORBS_MAX} за уровень">${e.orbs >= RULES.ORBS_MAX ? "орбов больше не будет" : `орбы ${e.orbs}/${RULES.ORBS_MAX}`}</span>
       <button class="rm" data-rm="${e.uid}" aria-label="Убрать ${d.name}">Убрать</button></div>
   </article>`;
 }
@@ -295,7 +299,7 @@ document.addEventListener("click", e => {
 });
 $("pickerClose").addEventListener("click", () => $("picker").close());
 document.addEventListener("keydown", e => {
-  if (e.target.closest("input, textarea, summary, dialog") || document.querySelector("dialog[open]") || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.target.closest("input:not([type=checkbox]), textarea, summary, dialog") || document.querySelector("dialog[open]") || e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.shiftKey) {
     const m = /^Digit([1-9])$/.exec(e.code);
     if (m && inLevel() && numbered[+m[1] - 1]) { e.preventDefault(); killEnemy(numbered[+m[1] - 1]); }
@@ -306,5 +310,5 @@ document.addEventListener("keydown", e => {
   else if (e.code === "KeyM") toggleSound();
 });
 
-render();
+try { render(); } catch (err) { H = freshH(); saveH(); render(); }
 setInterval(tick, 250);

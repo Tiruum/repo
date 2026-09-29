@@ -88,6 +88,7 @@ test("loot on the map from one extraction's goal", () => {
   assert.equal(e.count, 4);
   assert.equal(e.quota, 20000);
   close(e.total, 43830, 20);
+  close(R.lootEstimate(1, 8764).total, 31300, 1);
 });
 
 test("valuable spawn budget cap", () => {
