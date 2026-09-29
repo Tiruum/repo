@@ -52,6 +52,57 @@ function forecast(level, bad, h = 5) {
   return { exp, rare: 1 - noRare, ultra: 1 - noUltra };
 }
 
-  return { LEVEL_LOOP, LOOPS_MAX, BAD_LUCK_BONUS, slotTs, spawnChance, rarityOdds, levelOdds, atLeast, forecast };
+  /* ----- enemies: EnemyDirector (AmountSetup, Start, Update), EnemyParent.Despawn ----- */
+  const clamp01 = x => Math.min(1, Math.max(0, x));
+
+  // [1★, 2★, 3★] per level. AmountSetup evaluates step curves at lc = level - 1
+  // (lc/9 for lc < 10, (lc-9)/10 after) and truncates to int.
+  const COUNT_STEPS = [[1, [1, 0, 1]], [3, [1, 1, 1]], [6, [2, 2, 2]], [9, [2, 3, 2]], [10, [2, 3, 3]], [20, [3, 4, 4]]];
+  function enemyCounts(level) {
+    let c = COUNT_STEPS[0][1];
+    for (const [from, v] of COUNT_STEPS) if (level >= from) c = v;
+    return c.slice();
+  }
+
+  // First spawn pause: 60 × U(2,3) × spawnIdlePauseCurve(lc/9); 20%: × U(0.1, 0.25); min 5 s.
+  const IDLE_KEYS = [
+    { t: 0, v: 1, s: 0.0008574398816563189 },
+    { t: 0.5, v: 0.20000000298023224, s: 0.00043129612458869815 },
+    { t: 1, v: 0, s: -1.491617202758789 },
+  ];
+  function hermite(keys, t) {                    // Unity AnimationCurve with in = out tangents
+    if (t <= keys[0].t) return keys[0].v;
+    const last = keys[keys.length - 1];
+    if (t >= last.t) return last.v;
+    for (let i = 0; i < keys.length - 1; i++) {
+      const a = keys[i], b = keys[i + 1];
+      if (t > b.t) continue;
+      const dt = b.t - a.t, s = (t - a.t) / dt, s2 = s * s, s3 = s2 * s;
+      return (2 * s3 - 3 * s2 + 1) * a.v + (s3 - 2 * s2 + s) * a.s * dt + (-2 * s3 + 3 * s2) * b.v + (s3 - s2) * b.s * dt;
+    }
+    return last.v;
+  }
+  function firstSpawn(level) {
+    const k = hermite(IDLE_KEYS, clamp01((level - 1) / 9));
+    const min = Math.max(5, 120 * k), max = Math.max(5, 180 * k);
+    return { min, max, earlyMin: Math.max(5, 120 * k * 0.1), earlyMax: Math.max(5, 180 * k * 0.25), earlyChance: 0.2 };
+  }
+
+  // Respawn: U(240,300) × despawnedDecreaseMultiplier, min 1 s. The multiplier starts at 1 when the
+  // level loads and loses 0.2 every 10 minutes (EnemyDirector.Update), floor 0.
+  const RESPAWN_MIN = 240, RESPAWN_MAX = 300, COEF_STEP = 0.2, COEF_PERIOD = 600, EXTRACT_CAP = 30, ORBS_MAX = 3;
+  const respawnCoef = levelSec => Math.max(0, Math.round((1 - COEF_STEP * Math.floor(levelSec / COEF_PERIOD)) * 10) / 10);
+  const nextCoefDrop = levelSec => respawnCoef(levelSec) > 0 ? COEF_PERIOD - (levelSec % COEF_PERIOD) : null;
+  const respawnWindow = coef => ({ min: Math.max(1, RESPAWN_MIN * coef), max: Math.max(1, RESPAWN_MAX * coef) });
+  // All extractions done at x: every DespawnedTimer > 30 s is set to 0. Window [start, end] is what we
+  // know about the hidden timer; returns the new window (all values absolute seconds).
+  function afterExtractions(start, end, x) {
+    if (end - x <= EXTRACT_CAP) return { start, end };
+    if (start - x > EXTRACT_CAP) return { start: x, end: x };
+    return { start: x, end: Math.min(end, x + EXTRACT_CAP) };
+  }
+
+  return { LEVEL_LOOP, LOOPS_MAX, BAD_LUCK_BONUS, slotTs, spawnChance, rarityOdds, levelOdds, atLeast, forecast,
+    enemyCounts, firstSpawn, respawnCoef, nextCoefDrop, respawnWindow, afterExtractions, ORBS_MAX, COEF_PERIOD };
 })();
 if (typeof module === "object") module.exports = RULES;
