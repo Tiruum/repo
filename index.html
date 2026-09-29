@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>R.E.P.O. — трекер косметических коробок</title>
+<title>R.E.P.O. — помощник забега и трекер коробок</title>
 <meta name="description" content="Отмечай, была ли косметическая коробка на уровне, и смотри шансы на следующие. Формулы из кода игры, R.E.P.O. v0.4.4.3.">
-<meta property="og:title" content="R.E.P.O. — трекер косметических коробок">
+<meta property="og:title" content="R.E.P.O. — помощник забега и трекер коробок">
 <meta property="og:description" content="Отмечай, была ли коробка на уровне, и смотри шансы на следующие. Формулы из кода игры, v0.4.4.3.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://tiruum.github.io/repo/">
@@ -24,6 +24,7 @@
   --primary: #e7e9ee; --primary-ink: #1a1e26; --focus: #9fb4ff;
   --c0: #5ee08a; --c1: #3fd0f0; --c2: #e46cf5; --c3: #ffcc33;
   --good: #5ee08a; --bad: #ff7a7a;
+  --t1: #7fd08a; --t2: #f0a93b; --t3: #ff6b6b; --alarm: #ff5c5c;
   --tint: 24%; --tint-hover: 32%;
   --display: "Unbounded", "Segoe UI", system-ui, sans-serif;
   --body: "Golos Text", "Segoe UI", system-ui, sans-serif;
@@ -35,6 +36,7 @@
     --primary: #1a1e26; --primary-ink: #ffffff; --focus: #3d5bd9;
     --c0: #17a44b; --c1: #0a93b5; --c2: #b62fc9; --c3: #c28a00;
     --good: #17a44b; --bad: #d63b3b;
+    --t1: #1f9a4a; --t2: #b86e00; --t3: #d23434; --alarm: #c62828;
     --tint: 13%; --tint-hover: 19%;
   }
 }
@@ -44,6 +46,7 @@
     --primary: #1a1e26; --primary-ink: #ffffff; --focus: #3d5bd9;
     --c0: #17a44b; --c1: #0a93b5; --c2: #b62fc9; --c3: #c28a00;
     --good: #17a44b; --bad: #d63b3b;
+    --t1: #1f9a4a; --t2: #b86e00; --t3: #d23434; --alarm: #c62828;
     --tint: 13%; --tint-hover: 19%;
 }
 * { box-sizing: border-box; }
@@ -200,6 +203,51 @@ footer { margin-top: 22px; font-size: 13px; color: var(--muted); display: flex; 
 
 .toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; font-size: 14px; display: flex; gap: 14px; align-items: center; box-shadow: 0 12px 32px rgb(0 0 0 / .35); max-width: calc(100% - 32px); }
 .toast button { background: none; border: 0; color: var(--focus); cursor: pointer; font-weight: 600; padding: 0; }
+/* ===== run helper ===== */
+.t1 { --tc: var(--t1); } .t2 { --tc: var(--t2); } .t3 { --tc: var(--t3); }
+.pill { font-size: 12.5px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--text); }
+body[data-mode="level"] .pill { border-color: var(--good); color: var(--good); }
+.shop { grid-area: shop; } .lvlp { grid-area: lvlp; } .mobs { grid-area: mobs; } .summary { grid-area: summary; }
+body[data-mode="level"] .wrap { max-width: 1760px; }
+body[data-mode="level"] .grid { grid-template-columns: minmax(0, 4fr) minmax(0, 9fr) minmax(0, 5fr); grid-template-areas: "lvlp mobs log"; }
+body[data-mode="level"] .carts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+body[data-mode="level"] .chance output { font-size: 40px; }
+body[data-mode="shop"] .grid { grid-template-areas: "shop odds" "levels stats"; }
+body.has-summary[data-mode="idle"] .grid { grid-template-areas: "summary summary" "log odds" "levels stats"; }
+@media (max-width: 1180px) {
+  body[data-mode="level"] .grid { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); grid-template-areas: "lvlp mobs" "log mobs"; }
+}
+@media (max-width: 980px) {
+  body[data-mode] .grid { grid-template-columns: minmax(0, 1fr); }
+  body[data-mode="level"] .grid { grid-template-areas: "lvlp" "mobs" "log"; }
+  body[data-mode="shop"] .grid { grid-template-areas: "shop" "odds" "levels" "stats"; }
+  body.has-summary[data-mode="idle"] .grid { grid-template-areas: "summary" "log" "odds" "levels" "stats"; }
+}
+.big { padding: 16px 24px; font-size: 17px; }
+.shop-row { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-bottom: 18px; }
+.clock-sm span { display: block; font-size: 12.5px; color: var(--muted); }
+.clock-sm b { font-size: 22px; }
+.tsum { display: flex; gap: 18px; flex-wrap: wrap; align-items: baseline; margin-bottom: 10px; }
+.tsum span { display: inline-flex; align-items: center; gap: 7px; }
+.tsum i { width: 9px; height: 9px; border-radius: 50%; background: var(--tc); }
+.tsum b { font-size: 22px; }
+#shopForecast p { margin: 6px 0; font-size: 14px; }
+.warn { color: var(--t2); }
+.check { display: flex; gap: 8px; align-items: center; margin-top: 14px; font-size: 13.5px; color: var(--muted); cursor: pointer; }
+.clock b { display: block; font-size: 64px; font-weight: 700; line-height: 1; letter-spacing: -.02em; }
+.clock span { font-size: 13px; color: var(--muted); }
+.coef { margin: 22px 0 14px; }
+.coef-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 13.5px; }
+.coef-head b { font-size: 28px; }
+.coef-bar { display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px; margin: 8px 0 6px; }
+.coef-bar i { font-style: normal; text-align: center; font-size: 11px; padding: 4px 0; border-radius: 5px; background: var(--panel-2); color: var(--faint); }
+.coef-bar i.past { opacity: .45; }
+.coef-bar i.on { background: var(--primary); color: var(--primary-ink); font-weight: 600; }
+.first { font-size: 14px; margin: 0 0 16px; }
+.alarm { width: 100%; border: 1px solid color-mix(in srgb, var(--alarm) 55%, transparent); background: color-mix(in srgb, var(--alarm) 12%, transparent); color: var(--text); border-radius: 12px; padding: 12px 16px; cursor: pointer; font-weight: 600; display: flex; justify-content: center; gap: 10px; align-items: center; }
+.alarm:hover { background: color-mix(in srgb, var(--alarm) 20%, transparent); }
+.alarm:disabled { opacity: .4; cursor: default; }
+.banner { margin: 12px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--alarm); color: #fff; font-weight: 600; font-size: 14px; }
 /* phone overrides — keep last so they win over base rules */
 @media (max-width: 620px) {
   .wrap { padding: 14px 12px 22px; }
@@ -218,10 +266,12 @@ footer { margin-top: 22px; font-size: 13px; color: var(--muted); display: flex; 
 <body>
 <div class="wrap">
   <header class="top">
-    <div class="brand"><b>R.E.P.O.</b><span>трекер косметических коробок</span></div>
+    <div class="brand"><b>R.E.P.O.</b><span>помощник забега</span><span class="pill" id="modePill" hidden></span></div>
     <div class="actions">
       <button class="btn" id="newRun" title="Уровень снова 1. Невезение сохраняется: в игре оно живёт до перезапуска.">Новый забег</button>
+      <button class="btn" id="endRun" hidden title="Команда погибла или вышли в меню">Забег окончен</button>
       <button class="btn" id="restart" title="Игра перезапущена — невезение обнуляется">Перезапустил игру</button>
+      <button class="btn icon-btn" id="sound" aria-label="Звук"></button>
       <button class="btn icon-btn" id="theme" aria-label="Тема"></button>
       <details class="menu" id="menu">
         <summary aria-label="Ещё действия">⋯</summary>
@@ -234,7 +284,40 @@ footer { margin-top: 22px; font-size: 13px; color: var(--muted); display: flex; 
   </header>
 
   <main class="grid">
-    <section class="panel log" aria-label="Отметка уровня">
+    <section class="panel shop" id="shop" aria-label="Магазин" hidden>
+      <h2 id="shopTitle">Следующий уровень</h2>
+      <div class="shop-row">
+        <button class="primary big" id="startLevel">Начать уровень <kbd>S</kbd></button>
+        <div class="clock-sm"><span>забег</span><b class="num" id="runClockShop">0:00</b></div>
+      </div>
+      <div id="shopForecast"></div>
+      <label class="check"><input type="checkbox" id="groups"> Сыграно 5+ забегов: на уровнях 1–3 в слот 3★ может выпасть группа</label>
+    </section>
+
+    <section class="panel lvlp" id="lvlp" aria-label="Уровень" hidden>
+      <h2 id="lvlTitle">Уровень</h2>
+      <div class="clock"><b class="num" id="lvlClock">0:00</b><span>на уровне · забег <b class="num" id="runClock">0:00</b></span></div>
+      <div class="coef">
+        <div class="coef-head"><span>Коэффициент возрождения</span><b class="num" id="coef">1.0</b></div>
+        <div class="coef-bar" id="coefBar"></div>
+        <span class="muted" id="coefNext"></span>
+      </div>
+      <p class="first" id="firstSpawn"></p>
+      <button class="alarm" id="extract">Все выгрузки сданы <kbd>E</kbd></button>
+      <p class="banner" id="extractBanner" hidden>Выгрузки сданы: мобы идут в комнаты игроков, возрождение почти мгновенное.</p>
+    </section>
+
+    <section class="panel mobs" id="mobs" aria-label="Мобы" hidden>
+      <h2>Мобы <span id="mobsHint"></span></h2>
+      <div id="tiers"></div>
+    </section>
+
+    <section class="panel summary" id="summary" aria-label="Итог забега" hidden>
+      <h2>Итог забега</h2>
+      <div id="summaryBody"></div>
+    </section>
+
+    <section class="panel log" id="logP" aria-label="Отметка уровня">
       <div class="counters">
         <div class="counter">
           <span class="k">Уровень</span>
@@ -267,7 +350,7 @@ footer { margin-top: 22px; font-size: 13px; color: var(--muted); display: flex; 
       </div>
     </section>
 
-    <aside class="panel odds" aria-label="Шансы">
+    <aside class="panel odds" id="oddsP" aria-label="Шансы">
       <h2 id="oddsTitle">Шансы на уровне 1</h2>
       <div id="slots"></div>
       <ul class="rlist" id="rlist"></ul>
@@ -278,12 +361,12 @@ footer { margin-top: 22px; font-size: 13px; color: var(--muted); display: flex; 
       </div>
     </aside>
 
-    <section class="panel levels" aria-label="Уровни забега">
+    <section class="panel levels" id="levelsP" aria-label="Уровни забега">
       <h2>Уровни забега <span id="slotHint"></span></h2>
       <div class="tscroll" id="levels"></div>
     </section>
 
-    <aside class="panel stats" aria-label="Статистика">
+    <aside class="panel stats" id="statsP" aria-label="Статистика">
       <h2>За всё время</h2>
       <div class="totals">
         <div><span>Уровней</span><b class="num" id="sLevels">0</b></div>
@@ -305,8 +388,16 @@ footer { margin-top: 22px; font-size: 13px; color: var(--muted); display: flex; 
   </footer>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite" hidden><span id="toastText"></span><button id="toastUndo">Отменить</button></div>
+<dialog class="picker" id="picker" aria-labelledby="pickerTitle">
+  <h2 id="pickerTitle">Кто появился?</h2>
+  <div class="pgrid" id="pickerGrid"></div>
+  <button class="btn" id="pickerClose">Закрыть <kbd>Esc</kbd></button>
+</dialog>
 
 <script src="rules.js"></script>
+<script src="enemies.js"></script>
+<script src="run.js"></script>
 <script src="app.js"></script>
+<script src="helper.js"></script>
 </body>
 </html>

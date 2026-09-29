@@ -233,11 +233,6 @@ document.addEventListener("click", e => {
 $("nothing").addEventListener("click", () => recordLevel([]));
 $("next").addEventListener("click", () => { if (S.pending.length || inLevel()) recordLevel(S.pending); });
 $("undo").addEventListener("click", () => { $("menu").open = false; if (undo()) toast("Действие отменено", undoStack.length > 0); });
-$("newRun").addEventListener("click", () => {
-  remember();
-  S.level = 1; S.pending = []; nextMark = "new"; save(); render();
-  toast("Новый забег начат, невезение сохранено", true);
-});
 $("restart").addEventListener("click", () => {
   remember();
   S.bad = 0; nextMark = "restart"; save(); render();
