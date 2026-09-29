@@ -1557,6 +1557,7 @@ Add before the `return`:
     return { total: quota / (HAUL_SHARE * haulCurve(level)), quota, count };
   }
   // ValuableDirector.totalMaxValue (spawn budget, thousands): 30 → 180 over levels 1-10, 180 → 250 over 11-20.
+  // Spawning stops once the running total exceeds it, so the real total is usually a bit above (live: cap 30K, loot 31.3K).
   function totalValueCap(level) {
     const lc = level - 1, m2 = clamp01((lc - 9) / 10);
     return 1000 * (m2 > 0 ? Math.round(180 + 70 * m2) : Math.round(30 + 150 * clamp01(lc / 9)));
@@ -1603,7 +1604,7 @@ function renderLoot() {
     const e = RULES.lootEstimate(L, g);
     $("lootOut").innerHTML = `На карте ≈ <b>${money(e.total)}</b><br><span class="muted">сдать всего ${money(e.quota)} (${e.count} × ${money(g)})</span>`;
   } else {
-    $("lootOut").innerHTML = `<span class="muted">Выгрузок: ${RULES.extractionCount(L)} · лута до ${money(RULES.totalValueCap(L))}</span>`;
+    $("lootOut").innerHTML = `<span class="muted">Выгрузок: ${RULES.extractionCount(L)} · лута ≈ ${money(RULES.totalValueCap(L))}+</span>`;
   }
 }
 $("pointGoal").addEventListener("input", e => {
@@ -1617,7 +1618,7 @@ $("pointGoal").addEventListener("input", e => {
 Call `renderLoot();` at the end of `renderLevel()`. In `renderShop()`, inside the `$("shopForecast").innerHTML` template, add after the "Первые мобы" paragraph:
 
 ```js
-    <p>Выгрузок: ${RULES.extractionCount(L)} · лута на карте до ${money(RULES.totalValueCap(L))}.</p>
+    <p>Выгрузок: ${RULES.extractionCount(L)} · лута на карте ≈ ${money(RULES.totalValueCap(L))}+ (игра докладывает ценности, пока сумма не превысит эту планку).</p>
 ```
 
 - [ ] **Step 6: README** — add after the "Мобы (из кода игры)" section:
@@ -1627,12 +1628,13 @@ Call `renderLoot();` at the end of `renderLevel()`. In `renderShop()`, inside th
 
 - Квота забега = стоимость всех ценностей на карте × 0.7 × кривая уровня (0.4 на 1-м, 0.7 к 10-му, 1.0 к 20-му).
 - Квота каждой выгрузки = квота / число выгрузок (1 на 1-м уровне, 2 на 2–3, 3 на 4–5, 4 на 6–14, 5 с 15-го).
-- Введи квоту выгрузки на уровне — помощник покажет, сколько лута на карте.
+- Без квоты помощник показывает планку лута уровня: игра раскладывает ценности, пока их сумма не превысит $30K на 1-м уровне … $180K на 10-м … $250K на 20-м.
+- Введи квоту выгрузки на уровне — помощник покажет, сколько лута на карте (проверено в игре: квота $8 764 на 1-м уровне → $31 300 на карте).
 ```
 
 - [ ] **Step 7: BROWSER CHECK**
 
-New run → set level 6 with the stepper in the shop → start level. Loot line without input: "Выгрузок: 4 · лута до $113 000" (ru-RU non-breaking spaces are fine). Type `5000` → "На карте ≈ $43 83x", "сдать всего $20 000 (4 × $5 000)". Typing digits in the field must not trigger box keys (`2` adds no box). Reload → value kept. Level done → shop for level 7 shows "Выгрузок: 4 · лута на карте до $130 000". Screenshots 1920 dark + 1100 light.
+New run → set level 6 with the stepper in the shop → start level. Loot line without input: "Выгрузок: 4 · лута ≈ $113 000+" (ru-RU non-breaking spaces are fine). Type `5000` → "На карте ≈ $43 83x", "сдать всего $20 000 (4 × $5 000)". Typing digits in the field must not trigger box keys (`2` adds no box). Reload → value kept. Level done → shop for level 7 shows "Выгрузок: 4 · лута на карте ≈ $130 000+ (…)". Screenshots 1920 dark + 1100 light.
 
 - [ ] **Step 8: Commit**
 

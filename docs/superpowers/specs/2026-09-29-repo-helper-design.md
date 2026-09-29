@@ -106,6 +106,8 @@ From `RoundDirector.StartRound`, `ExtractionPoint.StateActive`, `LevelGenerator.
 - extractionCount = LevelGenerator.ExtractionAmount + 1, where modules = min(5+lc,10) + (lc≥10 ? min(lc−9,5) : 0) and
   ExtractionAmount = 4 (≥15 modules) / 3 (≥10) / 2 (≥8) / 1 (≥6) / 0 → levels 1: 1, 2–3: 2, 4–5: 3, 6–14: 4, 15+: 5.
 - Spawn budget cap (ValuableDirector.totalMaxValue): $30K → $180K over levels 1–10 (linear), $180K → $250K over 11–20.
+  Spawning stops once the running total exceeds the cap, so it is a typical total (slightly exceeded), not an upper bound.
+  Verified live on level 1: cap 30K, loot $31 300, haulGoal 8 764 = int(31 300 × 0.7 × 0.4), 1 extraction point.
 
 UI: the level panel has a number field "Квота выгрузки, $". With a value it shows the estimated loot on the map
 (pointGoal × count / (0.7 × haulCurve)) and the whole-level quota; without a value it shows the extraction count and cap.
