@@ -103,3 +103,27 @@ test("run ended mid-level keeps that level as failed", () => {
   assert.deepEqual(s.met.sort(), ["gnome", "robe"]);
   assert.deepEqual(s.boxes, []);
 });
+
+test("coefficient uses level time, not run time", () => {
+  const run = RUN.newRun(T0);
+  RUN.startLevel(run, 3, T0 + 30 * MIN);
+  RUN.addPick(run, "robe");
+  const e = run.level.enemies[0], t = T0 + 31 * MIN;
+  RUN.kill(run, e.uid, t);
+  assert.equal(e.coef, 1);
+  assert.equal(e.start, t + 240000);
+  assert.equal(e.end, t + 300000);
+});
+
+test("extractions done clamps a window that has >30 s left on its end; second call is a no-op", () => {
+  const run = levelWith(3, "robe"), e = run.level.enemies[0];
+  RUN.kill(run, e.uid, T0);
+  const x = T0 + 220000;
+  RUN.extractionsDone(run, x);
+  assert.equal(e.start, x);
+  assert.equal(e.end, x + 30000);
+  RUN.extractionsDone(run, x + 5000);
+  assert.equal(e.start, x);
+  assert.equal(e.end, x + 30000);
+  assert.equal(run.level.extractionsAt, x);
+});
