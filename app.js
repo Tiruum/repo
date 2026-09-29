@@ -9,7 +9,6 @@ const fresh = () => ({ level: 1, bad: 0, pending: [], history: [] });
 // history entry: { level, boxes: [rarity...], badBefore, expected, run: 'new'|'restart'|undefined }
 let S = load();
 let nextMark = null;           // 'new' | 'restart' marker for the next recorded level
-let lastUndo = null;
 
 function load() {
   try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.history) return { ...fresh(), ...s }; } catch (e) {}
@@ -18,13 +17,27 @@ function load() {
 function save() { try { localStorage.setItem(KEY, JSON.stringify({ ...S, nextMark })); } catch (e) {} }
 try { nextMark = JSON.parse(localStorage.getItem(KEY) || "{}").nextMark || null; } catch (e) {}
 
-const snapshot = () => JSON.stringify({ S, nextMark });
-function restore(snap) { const o = JSON.parse(snap); S = o.S; nextMark = o.nextMark; save(); render(); }
+/* ===== Undo and hooks shared with helper.js ===== */
+let onRecorded = boxes => {};          // helper: finish the running level
+let inLevel = () => false;             // helper: a level is running
+let afterRender = () => {};            // helper: render its panels
+let extra = { get: () => null, set: v => {} };   // helper state inside undo snapshots
 
-function toast(text, snap) {
-  lastUndo = snap;
+const UNDO_MAX = 20, undoStack = [];
+const snapshot = () => JSON.stringify({ S, nextMark, x: extra.get() });
+function remember() { undoStack.push(snapshot()); if (undoStack.length > UNDO_MAX) undoStack.shift(); }
+function undo() {
+  const snap = undoStack.pop();
+  if (!snap) return false;
+  const o = JSON.parse(snap);
+  S = o.S; nextMark = o.nextMark; extra.set(o.x);
+  save(); render();
+  return true;
+}
+
+function toast(text, undoable) {
   $("toastText").textContent = text;
-  $("toastUndo").hidden = !snap;
+  $("toastUndo").hidden = !undoable;
   $("toast").hidden = false;
   clearTimeout(toast.t);
   toast.t = setTimeout(() => { $("toast").hidden = true; }, 5000);
@@ -43,7 +56,7 @@ function addBox(r) {
 function removeBox(i = S.pending.length - 1) { if (i < 0) return; S.pending.splice(i, 1); save(); render(); }
 
 function recordLevel(boxes) {
-  const snap = snapshot();
+  remember();
   const o = levelOdds(S.level, S.bad);
   S.history.push({ level: S.level, boxes: boxes.slice(), badBefore: S.bad, expected: o.expected, run: nextMark || undefined });
   nextMark = null;
@@ -51,16 +64,9 @@ function recordLevel(boxes) {
   S.bad = boxes.length ? 0 : S.bad + 1;
   S.level += 1;
   S.pending = [];
+  onRecorded(boxes);
   save(); render();
-  toast(`Уровень ${S.level - 1} записан: ${describe(boxes)}`, snap);
-}
-
-function undoLevel() {
-  const last = S.history.pop();
-  if (!last) return;
-  S.level = last.level; S.bad = last.badBefore; S.pending = last.boxes.slice(); nextMark = last.run || null;
-  save(); render();
-  toast(`Запись уровня ${last.level} отменена`, null);
+  toast(`Уровень ${S.level - 1} записан: ${describe(boxes)}`, true);
 }
 
 function replayFrom(i) {
@@ -77,12 +83,12 @@ function replayFrom(i) {
 }
 
 function editHistory(i, change) {
-  const snap = snapshot();
+  remember();
   const h = S.history[i];
   change(h);
   replayFrom(i);
   save(); render();
-  toast(`Уровень ${h.level} исправлен: ${describe(h.boxes)}`, snap);
+  toast(`Уровень ${h.level} исправлен: ${describe(h.boxes)}`, true);
 }
 
 /* ===== Render ===== */
@@ -180,6 +186,7 @@ function render() {
   $("luckText").textContent = exp > 0.5
     ? `Нашёл ${found} при ожидаемых ${exp.toFixed(1)}: ${ratio >= 1.15 ? "везёт" : ratio <= 0.85 ? "не везёт" : "в пределах нормы"} (×${ratio.toFixed(2)}).`
     : "Отметь несколько уровней — здесь появится, насколько тебе везёт.";
+  afterRender();
 }
 
 const THEME_ICON = {
@@ -224,23 +231,23 @@ document.addEventListener("click", e => {
   }
 });
 $("nothing").addEventListener("click", () => recordLevel([]));
-$("next").addEventListener("click", () => { if (S.pending.length) recordLevel(S.pending); });
-$("undo").addEventListener("click", () => { $("menu").open = false; undoLevel(); });
+$("next").addEventListener("click", () => { if (S.pending.length || inLevel()) recordLevel(S.pending); });
+$("undo").addEventListener("click", () => { $("menu").open = false; if (undo()) toast("Действие отменено", undoStack.length > 0); });
 $("newRun").addEventListener("click", () => {
-  const snap = snapshot();
+  remember();
   S.level = 1; S.pending = []; nextMark = "new"; save(); render();
-  toast("Новый забег начат, невезение сохранено", snap);
+  toast("Новый забег начат, невезение сохранено", true);
 });
 $("restart").addEventListener("click", () => {
-  const snap = snapshot();
+  remember();
   S.bad = 0; nextMark = "restart"; save(); render();
-  toast("Невезение обнулено", snap);
+  toast("Невезение обнулено", true);
 });
 $("wipe").addEventListener("click", () => {
   $("menu").open = false;
-  const snap = snapshot();
+  remember();
   S = fresh(); nextMark = null; save(); render();
-  toast("История стёрта", snap);
+  toast("История стёрта", true);
 });
 $("theme").addEventListener("click", () => {
   theme = { system: "light", light: "dark", dark: "system" }[theme];
@@ -249,11 +256,11 @@ $("theme").addEventListener("click", () => {
   toast(`Тема: ${THEME_NAME[theme]}`, null);
 });
 matchMedia("(prefers-color-scheme: light)").addEventListener("change", () => { if (theme === "system") applyTheme(); });
-$("toastUndo").addEventListener("click", () => { if (lastUndo) restore(lastUndo); lastUndo = null; $("toast").hidden = true; });
+$("toastUndo").addEventListener("click", () => { undo(); $("toast").hidden = true; });
 
 document.addEventListener("keydown", e => {
-  if (e.target.closest("input, textarea, summary")) return;
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); undoLevel(); return; }
+  if (e.target.closest("input, textarea, summary, dialog")) return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); if (undo()) toast("Действие отменено", undoStack.length > 0); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.key === "Escape") { $("menu").open = false; $("toast").hidden = true; return; }
   if (["1", "2", "3", "4"].includes(e.key)) addBox(+e.key - 1);
@@ -261,7 +268,7 @@ document.addEventListener("keydown", e => {
   else if (e.key === "Enter") {
     // keep Enter for keyboard-focused controls other than the rarity buttons
     if (e.target.closest(".menu, .btn, .stepper, .levels, .chip, .ghost, #toast")) return;
-    e.preventDefault(); if (S.pending.length) recordLevel(S.pending);
+    e.preventDefault(); if (S.pending.length || inLevel()) recordLevel(S.pending);
   }
   else if (e.key === "Backspace") { e.preventDefault(); removeBox(); }
 });
