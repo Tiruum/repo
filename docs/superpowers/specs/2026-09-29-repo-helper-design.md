@@ -18,7 +18,7 @@ game's own rules.
 - Static site on GitHub Pages, no build step, vanilla JS.
 - Also runs as a Discord Activity: no external requests (fonts, images, scripts all same origin).
 - State in `localStorage` only. Timers are stored as timestamps so a reload loses nothing.
-- Existing box tracker data (`repoBoxTracker.v1`) must keep working; migrate, never drop.
+- Existing box tracker data (`repoBoxTracker.v1`) must keep working unchanged.
 - Existing design system: graphite palette, Unbounded + Golos Text, light/dark toggle.
 - Layout targets a wide second monitor; still usable down to ~1000px, no need for phone layout.
 - The game does not pause (Esc menu keeps running), so there is no pause feature.
@@ -28,12 +28,14 @@ game's own rules.
 | File | Role |
 |---|---|
 | `index.html` | markup skeleton + CSS |
-| `rules.js` | pure game rules: box odds (moved from index.html), enemy counts, pools, respawn math |
-| `enemies.js` | enemy data: name, tier, HP, damage, description, SVG icon |
-| `app.js` | state, persistence, rendering, hotkeys, sound |
+| `rules.js` | pure game rules: box odds (moved from index.html), enemy counts, first spawn, respawn math |
+| `enemies.js` | enemy data: name, tier, HP, damage, description, SVG icon; spawn setups and pools |
+| `run.js` | pure run state: start level, picks, kills, extractions, statuses, run summary |
+| `app.js` | existing box tracker UI (moved from index.html), shared undo stack and hooks |
+| `helper.js` | run UI: modes, level/shop/summary panels, enemy cards, ticking timers, sound, hotkeys |
 
-Plain `<script>` tags (no modules needed, but `type="module"` is fine; same origin works in Activity).
-`rules.js` has no DOM access, so it can be checked in Node against the Python/IL findings.
+Plain classic `<script>` tags sharing one global scope, no modules, no build.
+`rules.js`, `enemies.js`, `run.js` have no DOM access and are tested in Node (`node --test`).
 
 ## Modes
 
@@ -169,17 +171,18 @@ Hotkeys are ignored while a text field or the picker has focus; Esc closes the p
 
 ## State
 
-One `localStorage` key `repoHelper.v1`:
+Box tracker state stays in its existing key `repoBoxTracker.v1` (no migration, old data keeps working).
+Helper state lives in a new key `repoHelper.v1`:
 
 ```
 {
-  box: {...existing tracker state...},           // migrated from repoBoxTracker.v1
-  settings: { sound, groupsAllowed },
+  settings: { sound, groups },
   run: null | {
-    startedAt, levelStartedAt | null, mode: 'shop' | 'level',
-    extractionsDoneAt | null,
-    enemies: [{ id, slotTier, killedAt | null, windowStart, windowEnd, orbs, kills }],
-    seenThisRun: { enemyId: count }
+    startedAt, mode: 'shop' | 'level', seq,
+    level: null | { number, startedAt, extractionsAt | null,
+                    picks: [{ pick, tier, setupId }],
+                    enemies: [{ uid, pick, id, killedAt, start, end, coef, kills, orbs }] },
+    levels: [{ number, startedAt, endedAt, boxes, enemies: [id], kills, failed? }]
   },
   runs: [ summary... ]                            // finished runs
 }
@@ -200,4 +203,5 @@ Undo keeps a small stack of snapshots (last 20 actions).
 - `rules.js` checked in Node: counts table for levels 1–30, pools per level, first-spawn range,
   coefficient steps, respawn windows, extraction-done rule; box odds unchanged vs current page.
 - Browser check in headless Edge screenshots (light/dark, 1920 and 1100 widths) for each mode.
-- Migration: page opened with an existing `repoBoxTracker.v1` keeps history and stats.
+- Existing data: page opened with an existing `repoBoxTracker.v1` keeps history and stats.
+- Run ended while a level is running (team died): that level is kept in the summary as failed, its kills count, no box level is recorded.
