@@ -264,7 +264,7 @@ document.addEventListener("keydown", e => {
   else if (e.key === "0") { if (!S.pending.length) recordLevel([]); }
   else if (e.key === "Enter") {
     // keep Enter for keyboard-focused controls other than the rarity buttons
-    if (e.target.closest(".menu, .btn, .stepper, .levels, .chip, .ghost, #toast")) return;
+    if (e.target.closest(".menu, .btn, .stepper, .levels, .chip, .ghost, .mobs, .lvlp, #toast")) return;
     e.preventDefault(); if (S.pending.length || inLevel()) recordLevel(S.pending);
   }
   else if (e.key === "Backspace") { e.preventDefault(); removeBox(); }
