@@ -334,6 +334,12 @@ document.addEventListener("click", e => {
   else if (t.dataset.rm) removeEnemyH(+t.dataset.rm);
 });
 $("pickerClose").addEventListener("click", () => $("picker").close());
+// A click on the backdrop lands on the <dialog> itself outside its box: close, like Esc.
+$("picker").addEventListener("click", e => {
+  if (e.target !== $("picker")) return;
+  const r = $("picker").getBoundingClientRect();
+  if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) $("picker").close();
+});
 document.addEventListener("keydown", e => {
   if (e.target.closest("input:not([type=checkbox]), textarea, summary, dialog") || document.querySelector("dialog[open]") || e.ctrlKey || e.metaKey || e.altKey) return;
   if (e.shiftKey) {
