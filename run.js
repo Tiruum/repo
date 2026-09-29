@@ -84,7 +84,7 @@ const RUN = (() => {
     const lv = run.level;
     if (!lv) return;
     const entry = { number: lv.number, startedAt: lv.startedAt, endedAt: now, boxes: boxes.slice(),
-      enemies: lv.enemies.map(e => e.id), kills: lv.enemies.reduce((a, e) => a + e.kills, 0) };
+      enemies: lv.enemies.map(e => e.id), picks: lv.picks.map(p => p.setupId), kills: lv.enemies.reduce((a, e) => a + e.kills, 0) };
     if (failed) entry.failed = true;
     run.levels.push(entry);
     run.level = null;
@@ -93,10 +93,29 @@ const RUN = (() => {
   const endLevel = (run, boxes, now) => closeLevel(run, boxes, now, false);
   const endRun = (run, now) => closeLevel(run, [], now, true);
 
-  function seenCounts(run) {
-    const c = {};
-    for (const l of run.levels) for (const id of new Set(l.enemies)) c[id] = (c[id] || 0) + 1;
-    return c;
+  // RunManager.enemiesSpawned: each spawned setup is added twice (max 4 copies); after every level one copy of
+  // each setup that was there when the level started is removed (EnemiesSpawnedRemoveStart/End).
+  const levelPicks = l => l.picks || [...new Set(l.enemies)];      // records from before picks were stored
+  function spawnHistory(run) {
+    const h = {};
+    for (const l of run.levels) {
+      const before = Object.keys(h).filter(id => h[id] > 0);
+      for (const id of levelPicks(l)) h[id] = Math.min(4, (h[id] || 0) + 2);
+      for (const id of before) h[id] -= 1;
+    }
+    return h;
+  }
+
+  // Odds that one pick for this tier is each setup (EnemyDirector.PickEnemies): weight = chance (100, groups 60)
+  // − 30 per copy in the run history − 10 per same setup already picked on this level, at least 1.
+  const PICK_CHANCE = 100, GROUP_CHANCE = 60;
+  function pickOdds(run, tier, level, groupsAllowed) {
+    const hist = spawnHistory(run), here = {};
+    if (run.level) for (const p of run.level.picks) here[p.setupId] = (here[p.setupId] || 0) + 1;
+    const pool = E.enemyPool(tier, level, groupsAllowed);
+    const w = pool.map(s => Math.max(1, (s.group ? GROUP_CHANCE : PICK_CHANCE) - 30 * (hist[s.id] || 0) - 10 * (here[s.id] || 0)));
+    const p = R.raceOdds(w);
+    return pool.map((setup, i) => ({ setup, p: p[i], recent: (hist[setup.id] || 0) > 0 })).sort((a, b) => b.p - a.p);
   }
 
   function summary(run, now) {
@@ -110,6 +129,6 @@ const RUN = (() => {
     };
   }
 
-  return { newRun, startLevel, levelSec, addPick, removeEnemy, kill, cancelKill, respawned, extractionsDone, status, endLevel, endRun, seenCounts, summary };
+  return { newRun, startLevel, levelSec, addPick, removeEnemy, kill, cancelKill, respawned, extractionsDone, status, endLevel, endRun, spawnHistory, pickOdds, summary };
 })();
 if (typeof module === "object") module.exports = RUN;

@@ -2,6 +2,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const RUN = require("../run.js");
 
+const close = (a, b, eps) => assert.ok(Math.abs(a - b) < eps, `${a} ≉ ${b}`);
+
 const MIN = 60000, T0 = 1_000_000;
 const levelWith = (number, setupId) => {
   const run = RUN.newRun(T0);
@@ -84,8 +86,7 @@ test("end level records a summary and returns to the shop", () => {
   RUN.endLevel(run, [1], T0 + 9 * MIN);
   assert.equal(run.mode, "shop");
   assert.equal(run.level, null);
-  assert.deepEqual(run.levels[0], { number: 2, startedAt: T0, endedAt: T0 + 9 * MIN, boxes: [1], enemies: ["robe"], kills: 1 });
-  assert.deepEqual(RUN.seenCounts(run), { robe: 1 });
+  assert.deepEqual(run.levels[0], { number: 2, startedAt: T0, endedAt: T0 + 9 * MIN, boxes: [1], enemies: ["robe"], picks: ["robe"], kills: 1 });
 });
 
 test("run ended mid-level keeps that level as failed", () => {
@@ -161,4 +162,43 @@ test("respawned early ends the cooldown now and keeps the kill", () => {
   assert.equal(e.orbs, 1);
   assert.equal(RUN.respawned(run, e.uid, t), false);        // already back
   assert.ok(RUN.kill(run, e.uid, t + 1000));                // can be killed again at once
+});
+
+const playLevel = (run, number, setups) => {
+  RUN.startLevel(run, number, T0);
+  for (const id of setups) RUN.addPick(run, id);
+  RUN.endLevel(run, [], T0);
+};
+
+test("spawn history: +2 per spawn (max 4), −1 per level for setups present at its start", () => {
+  const run = RUN.newRun(T0);
+  playLevel(run, 1, ["gnome", "robe"]);
+  assert.deepEqual(RUN.spawnHistory(run), { gnome: 2, robe: 2 });
+  playLevel(run, 2, ["gnome"]);                      // gnome 2 → 4 (cap) → 3; robe 2 → 1
+  assert.deepEqual(RUN.spawnHistory(run), { gnome: 3, robe: 1 });
+  playLevel(run, 3, []);
+  playLevel(run, 4, []);
+  playLevel(run, 5, []);
+  assert.deepEqual(RUN.spawnHistory(run), { gnome: 0, robe: 0 });
+});
+
+test("pick odds: an enemy from the last level almost never comes back", () => {
+  const run = RUN.newRun(T0);
+  playLevel(run, 1, ["gnome", "robe"]);
+  const odds = RUN.pickOdds(run, 1, 2, false);           // 9 tier-1 setups, gnome weight 100 − 60 = 40
+  assert.equal(odds.length, 9);
+  const g = odds.find(o => o.setup.id === "gnome");
+  close(g.p, 0.4 ** 8 / 9, 1e-12);
+  assert.equal(g.recent, true);
+  assert.equal(odds[odds.length - 1].setup.id, "gnome");     // sorted, most likely first
+  close(odds.reduce((a, o) => a + o.p, 0), 1, 1e-9);
+  for (const o of odds.slice(0, 8)) close(o.p, (1 - g.p) / 8, 1e-9);
+});
+
+test("pick odds inside a level count this level's picks (−10 each)", () => {
+  const run = RUN.newRun(T0);
+  RUN.startLevel(run, 20, T0);                         // 4 tier-3 slots
+  RUN.addPick(run, "robe");
+  const r = RUN.pickOdds(run, 3, 20, false).find(o => o.setup.id === "robe");
+  close(r.p, 0.9 ** 7 / 8, 1e-12);                     // 8 setups, robe weight 90
 });

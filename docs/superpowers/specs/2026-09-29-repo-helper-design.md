@@ -78,8 +78,11 @@ The mode follows run state; a header switch shows it.
   4 Apex Predators, 4 Spewers, 4 Shadow Children, 6 Bangers, 10 Gnomes, 2 Gambits,
   2 Heart Huggers, 5 Ticks, 3 Birthday Boys, 3 Elsas, 3 Headgrabs, 3 Ooglies, 3 Bellas.
   A group fills one 3★ slot and adds one card per member.
-- Pick weight = max(1, chance − 30 × times spawned this run − 10 × already in this level's list);
-  chance 100, groups 60. Shown only as a hint ("seen this run → less likely"), not as exact odds.
+- Pick weight = max(1, chance − 30 × copies in RunManager.enemiesSpawned − 10 × same setup already picked this level);
+  chance 100, groups 60; each candidate rolls Random.Range(0, weight), highest wins (exact odds: RULES.raceOdds).
+  History: a spawned setup adds 2 copies (max 4); after each level one copy of every setup present at its start is removed.
+  UI (added 2026-09-29): shop shows the top 4 per tier (chance to appear at least once ≈ 1 − (1 − p)^slots) and the
+  recently seen ones; the picker lists setups most likely first with the per-slot chance.
 
 **First spawn**: pause = 60 × U(2,3) × idleCurve(clamp01(lc/9)), idleCurve keys (0,1) (0.5,0.2) (1,0)
 (Hermite, evaluate with the asset's tangents); 20% chance × U(0.1,0.25); minimum 5 s.

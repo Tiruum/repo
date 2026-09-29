@@ -97,3 +97,13 @@ test("valuable spawn budget cap", () => {
   assert.equal(R.totalValueCap(11), 187000);
   assert.equal(R.totalValueCap(20), 250000);
 });
+
+test("race odds: each rolls Random(0, w), highest wins", () => {
+  for (const p of R.raceOdds([100, 100, 100, 100])) close(p, 0.25, 1e-12);
+  const [a, b] = R.raceOdds([100, 40]);
+  close(a, 1 - 40 / 200, 1e-12);
+  close(b, 40 / 200, 1e-12);
+  const p = R.raceOdds([100, 70, 40, 1, 100]);
+  close(p.reduce((x, y) => x + y, 0), 1, 1e-12);
+  close(p[0], p[4], 1e-12);
+});

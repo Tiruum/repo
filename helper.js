@@ -1,5 +1,5 @@
 /* ===== REPO helper: run mode UI. Needs rules.js, enemies.js, run.js, app.js (loaded before). ===== */
-const { ENEMIES, enemyPool, setupLabel } = ENEMY_DATA;
+const { ENEMIES, setupLabel } = ENEMY_DATA;
 const HKEY = "repoHelper.v1";
 const BASE_TITLE = document.title;
 const freshH = () => ({ settings: { sound: true, groups: false }, run: null, runs: [] });
@@ -137,6 +137,17 @@ $("pointGoal").addEventListener("input", e => {
   saveH(); renderLoot();
 });
 
+const oddsText = p => p < 0.005 ? "<1%" : `${Math.round(p * 100)}%`;
+// Most likely enemies per tier for the next level; chance to see each at least once in the tier's slots.
+function likelyEnemies(L, counts) {
+  return [1, 2, 3].filter(t => counts[t - 1]).map(t => {
+    const n = counts[t - 1], odds = RUN.pickOdds(H.run, t, L, H.settings.groups);
+    const top = odds.slice(0, 4).map(o => `<span>${setupLabel(o.setup)} <b class="num">${oddsText(1 - (1 - o.p) ** n)}</b></span>`).join("");
+    const rare = odds.filter(o => o.recent).map(o => setupLabel(o.setup));
+    return `<div class="lk t${t}"><i>${"★".repeat(t)}</i>${top}${rare.length ? `<small>реже: ${rare.join(", ")}</small>` : ""}</div>`;
+  }).join("");
+}
+
 function renderShop() {
   const L = S.level, c = RULES.enemyCounts(L), f = RULES.firstSpawn(L);
   $("shopTitle").innerHTML = `Дальше уровень <span class="stepper"><button data-step="level:-1" aria-label="Уровень меньше">−</button><output class="num">${L}</output><button data-step="level:1" aria-label="Уровень больше">+</button></span>`;
@@ -145,6 +156,8 @@ function renderShop() {
   $("shopForecast").innerHTML = `
     <div class="tsum">${c.map((n, i) => `<span class="t${i + 1}"><i></i>${"★".repeat(i + 1)} <b class="num">${n}</b></span>`).join("")}
       <span class="muted">всего <b class="num">${c[0] + c[1] + c[2]}</b> слотов</span></div>
+    <div class="likely">${likelyEnemies(L, c)}</div>
+    <p class="muted">Шансы по правилам игры: мобы с прошлых уровней выпадают реже. Точнее всего, если отмечаешь всех мобов.</p>
     <p>Первые мобы через ${range(f.min, f.max)}${f.max > 5 ? `, в 20% случаев раньше: ${range(f.earlyMin, f.earlyMax)}` : ""}.</p>
     <p>Выгрузок: ${RULES.extractionCount(L)} · лута на карте ≈ ${money(RULES.totalValueCap(L))}+ (игра докладывает ценности, пока сумма не превысит эту планку).</p>
     <p class="muted">Gnome приходят пачкой по 4, Banger по 3. ${L < 3 ? "Loom появляется с 3-го уровня." : ""}</p>
@@ -216,12 +229,13 @@ function tickEnemies(t) {
 
 function openPicker(tier) {
   if (!inLevel()) return;
-  const lv = H.run.level, seen = RUN.seenCounts(H.run);
+  const lv = H.run.level;
   $("pickerTitle").textContent = `${"★".repeat(tier)}: кто появился на уровне ${lv.number}?`;
-  $("pickerGrid").innerHTML = enemyPool(tier, lv.number, H.settings.groups).map(s => {
-    const d = ENEMIES[s.members[0][0]], was = seen[s.members[0][0]];
+  // most likely first, so the usual answer sits in the first row
+  $("pickerGrid").innerHTML = RUN.pickOdds(H.run, tier, lv.number, H.settings.groups).map(({ setup: s, p, recent }) => {
+    const d = ENEMIES[s.members[0][0]];
     return `<button class="t${tier}" data-pick="${s.id}"><span class="ic">${iconSvg(d)}</span>
-      <span>${setupLabel(s)}${was ? `<small>уже был в забеге: реже выпадает</small>` : ""}</span></button>`;
+      <span>${setupLabel(s)}<small>${oddsText(p)}${recent ? " · был недавно" : ""}</small></span></button>`;
   }).join("");
   $("picker").showModal();
 }

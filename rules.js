@@ -102,6 +102,22 @@ function forecast(level, bad, h = 5) {
     return { start: x, end: Math.min(end, x + EXTRACT_CAP) };
   }
 
+  /* ----- enemy picks: EnemyDirector.PickEnemies ----- */
+  // Every candidate rolls Random.Range(0, weight); the highest roll wins. Exact odds of winning for each weight.
+  function raceOdds(weights) {
+    const cuts = [0, ...new Set(weights)].sort((a, b) => a - b);
+    return weights.map((wi, i) => {
+      let p = 0;
+      for (let s = 0; s + 1 < cuts.length && cuts[s] < wi; s++) {
+        const a = cuts[s], b = cuts[s + 1];       // on [a, b] every other roll is below x with chance x/w or 1
+        let k = 0, c = 1;
+        weights.forEach((wj, j) => { if (j !== i && wj >= b) { k++; c *= wj; } });
+        p += (b ** (k + 1) - a ** (k + 1)) / ((k + 1) * c * wi);
+      }
+      return p;
+    });
+  }
+
   /* ----- loot: RoundDirector.StartRound, ExtractionPoint.StateActive, LevelGenerator.TileGeneration ----- */
   // Run quota = int(sum of valuables at spawn × 0.7 × haulCurve); each extraction's goal = quota / count.
   const HAUL_1 = [
@@ -136,6 +152,6 @@ function forecast(level, bad, h = 5) {
 
   return { LEVEL_LOOP, LOOPS_MAX, BAD_LUCK_BONUS, slotTs, spawnChance, rarityOdds, levelOdds, atLeast, forecast,
     enemyCounts, firstSpawn, respawnCoef, nextCoefDrop, respawnWindow, afterExtractions, ORBS_MAX, COEF_PERIOD,
-    haulCurve, extractionCount, lootEstimate, totalValueCap };
+    haulCurve, extractionCount, lootEstimate, totalValueCap, raceOdds };
 })();
 if (typeof module === "object") module.exports = RULES;
