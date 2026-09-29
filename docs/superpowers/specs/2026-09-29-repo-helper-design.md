@@ -96,6 +96,21 @@ Shown as a range, e.g. level 1: 2:00–3:00 (or early).
 - On the map an enemy stays 20–40 s of "no player close" time, then leaves (not tracked, info only).
 - A killed enemy drops an orb (small/medium/big by tier), at most 3 per enemy per level.
 
+## Loot on the map (added 2026-09-29)
+
+From `RoundDirector.StartRound`, `ExtractionPoint.StateActive`, `LevelGenerator.TileGeneration`, level0 asset:
+- haulGoalMax = sum of all valuables' dollar values at spawn (enemy orbs come later and do not count).
+- Run quota haulGoal = int(haulGoalMax × 0.7 × haulCurve); haulCurve: lc ≤ 9 → curve1(lc/9) keys (0,0.4) (0.1,0.6) (1.0015,0.6994);
+  lc ≥ 10 → curve2((lc−9)/10) from 0.7 to 1.0 (Hermite with the asset tangents).
+- Each extraction point's goal = haulGoal / extractionCount (int division).
+- extractionCount = LevelGenerator.ExtractionAmount + 1, where modules = min(5+lc,10) + (lc≥10 ? min(lc−9,5) : 0) and
+  ExtractionAmount = 4 (≥15 modules) / 3 (≥10) / 2 (≥8) / 1 (≥6) / 0 → levels 1: 1, 2–3: 2, 4–5: 3, 6–14: 4, 15+: 5.
+- Spawn budget cap (ValuableDirector.totalMaxValue): $30K → $180K over levels 1–10 (linear), $180K → $250K over 11–20.
+
+UI: the level panel has a number field "Квота выгрузки, $". With a value it shows the estimated loot on the map
+(pointGoal × count / (0.7 × haulCurve)) and the whole-level quota; without a value it shows the extraction count and cap.
+The shop forecast shows the next level's extraction count and cap. The value is stored on the running level.
+
 ## Enemy data (`enemies.js`)
 
 Per enemy: id, English name, tier, HP, player damage values, one-shot flag (damage ≥ 100),

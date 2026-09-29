@@ -1451,3 +1451,192 @@ git commit -m "Describe the run helper in README and meta"
 
 - [ ] **Step 4: Hand-off** — tell the user the branch is ready, show screenshots, and ask before `git merge` into `main` + push (push publishes the public site). Push command when approved:
 `git -c credential.helper= -c "credential.helper=!gh auth git-credential" push origin main`
+
+---
+
+### Task 9: Loot on the map from the extraction quota
+
+Added after the user asked for it (spec section "Loot on the map"). Runs after Task 8.
+
+**Files:**
+- Modify: `rules.js` (generalise `hermite` to in/out tangents, add loot rules), `tests/rules.test.js`
+- Modify: `index.html` (field + CSS in the level panel), `helper.js` (render + input handling, shop line), `README.md`
+
+**Interfaces:**
+- Produces (added to `RULES`): `haulCurve(level) → number`, `extractionCount(level) → int`, `lootEstimate(level, pointGoal) → { total, quota, count }` (dollars), `totalValueCap(level) → dollars`.
+- Consumes: helper.js `H`, `saveH()`, `inLevel()`, `renderShop()`, `renderLevel()`, `$`.
+
+- [ ] **Step 1: Write the failing tests** — append to `tests/rules.test.js`
+
+```js
+test("extraction points per level", () => {
+  const want = { 1: 1, 2: 2, 3: 2, 4: 3, 5: 3, 6: 4, 10: 4, 14: 4, 15: 5, 30: 5 };
+  for (const [lvl, n] of Object.entries(want)) assert.equal(R.extractionCount(+lvl), n, `level ${lvl}`);
+});
+
+test("haul goal curve: 0.4 on level 1, 0.7 → 1.0 over levels 11-20", () => {
+  close(R.haulCurve(1), 0.4, 1e-6);
+  close(R.haulCurve(10), 0.6994, 1e-3);
+  close(R.haulCurve(11), 0.73, 1e-3);
+  close(R.haulCurve(20), 1, 1e-6);
+  close(R.haulCurve(40), 1, 1e-6);
+});
+
+test("loot on the map from one extraction's goal", () => {
+  const mult = { 1: 3.571, 2: 4.760, 6: 8.766, 10: 8.170, 11: 7.828, 15: 8.403, 20: 7.143 };
+  for (const [lvl, m] of Object.entries(mult)) close(R.lootEstimate(+lvl, 1000).total / 1000, m, 0.01);
+  const e = R.lootEstimate(6, 5000);
+  assert.equal(e.count, 4);
+  assert.equal(e.quota, 20000);
+  close(e.total, 43830, 20);
+});
+
+test("valuable spawn budget cap", () => {
+  assert.equal(R.totalValueCap(1), 30000);
+  assert.equal(R.totalValueCap(10), 180000);
+  assert.equal(R.totalValueCap(11), 187000);
+  assert.equal(R.totalValueCap(20), 250000);
+});
+```
+
+- [ ] **Step 2: Run to verify they fail**
+
+Run: `node --test`
+Expected: FAIL with `R.extractionCount is not a function`.
+
+- [ ] **Step 3: Implement in `rules.js`**
+
+Replace the `IDLE_KEYS` constant and `hermite` function with (tangents are now explicit in/out; first-spawn tests must stay green):
+
+```js
+  const IDLE_KEYS = [
+    { t: 0, v: 1, in: 0.0008574398816563189, out: 0.0008574398816563189 },
+    { t: 0.5, v: 0.20000000298023224, in: 0.00043129612458869815, out: 0.00043129612458869815 },
+    { t: 1, v: 0, in: -1.491617202758789, out: -1.491617202758789 },
+  ];
+  function hermite(keys, t) {                    // Unity AnimationCurve (non-weighted tangents)
+    if (t <= keys[0].t) return keys[0].v;
+    const last = keys[keys.length - 1];
+    if (t >= last.t) return last.v;
+    for (let i = 0; i < keys.length - 1; i++) {
+      const a = keys[i], b = keys[i + 1];
+      if (t > b.t) continue;
+      const dt = b.t - a.t, s = (t - a.t) / dt, s2 = s * s, s3 = s2 * s;
+      return (2 * s3 - 3 * s2 + 1) * a.v + (s3 - 2 * s2 + s) * a.out * dt + (-2 * s3 + 3 * s2) * b.v + (s3 - s2) * b.in * dt;
+    }
+    return last.v;
+  }
+```
+
+Add before the `return`:
+
+```js
+  /* ----- loot: RoundDirector.StartRound, ExtractionPoint.StateActive, LevelGenerator.TileGeneration ----- */
+  // Run quota = int(sum of valuables at spawn × 0.7 × haulCurve); each extraction's goal = quota / count.
+  const HAUL_1 = [
+    { t: 0, v: 0.4000000059604645, in: 0.0006335551152005792, out: 0.0006335551152005792 },
+    { t: 0.10000000149011612, v: 0.6000000238418579, in: 0.012308282777667046, out: 0.012308282777667046 },
+    { t: 1.00152587890625, v: 0.6994247436523438, in: 0, out: 0 },
+  ];
+  const HAUL_2 = [
+    { t: 0, v: 0.699999988079071, in: 0.0006335551152005792, out: 0.30000001192092896 },
+    { t: 1, v: 1, in: 0.30000001192092896, out: 0 },
+  ];
+  const HAUL_SHARE = 0.7;
+  function haulCurve(level) {
+    const lc = level - 1, m2 = clamp01((lc - 9) / 10);
+    return m2 > 0 ? hermite(HAUL_2, m2) : hermite(HAUL_1, clamp01(lc / 9));
+  }
+  // LevelGenerator: modules = min(5 + lc, 10) (+ up to 5 more after level 10); ExtractionAmount by modules, +1 point.
+  function extractionCount(level) {
+    const lc = level - 1, modules = Math.min(5 + lc, 10) + (lc >= 10 ? Math.min(lc - 9, 5) : 0);
+    return 1 + (modules >= 15 ? 4 : modules >= 10 ? 3 : modules >= 8 ? 2 : modules >= 6 ? 1 : 0);
+  }
+  function lootEstimate(level, pointGoal) {
+    const count = extractionCount(level), quota = pointGoal * count;
+    return { total: quota / (HAUL_SHARE * haulCurve(level)), quota, count };
+  }
+  // ValuableDirector.totalMaxValue (spawn budget, thousands): 30 → 180 over levels 1-10, 180 → 250 over 11-20.
+  function totalValueCap(level) {
+    const lc = level - 1, m2 = clamp01((lc - 9) / 10);
+    return 1000 * (m2 > 0 ? Math.round(180 + 70 * m2) : Math.round(30 + 150 * clamp01(lc / 9)));
+  }
+```
+
+Extend the `return` with `haulCurve, extractionCount, lootEstimate, totalValueCap`.
+
+- [ ] **Step 4: Run tests**
+
+Run: `node --test`
+Expected: all PASS (the earlier first-spawn tests prove the hermite change kept behaviour).
+
+- [ ] **Step 5: UI** — `index.html`, inside `#lvlp` right after the `.coef` block:
+
+```html
+      <div class="loot">
+        <label for="pointGoal">Квота выгрузки, $</label>
+        <input id="pointGoal" type="number" min="0" step="100" inputmode="numeric" placeholder="с экрана выгрузки">
+        <p id="lootOut"></p>
+      </div>
+```
+
+CSS (after the `.coef-bar` rules):
+
+```css
+.loot { margin: 0 0 16px; }
+.loot label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+.loot input { width: 100%; font: 600 18px var(--display); color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; }
+.loot input:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
+.loot p { margin: 8px 0 0; font-size: 14px; }
+.loot p b { font-family: var(--display); font-size: 20px; }
+```
+
+`helper.js` — add near the other helpers:
+
+```js
+const money = n => "$" + Math.round(n).toLocaleString("ru-RU");
+function renderLoot() {
+  const lv = H.run.level, L = lv.number, g = lv.pointGoal;
+  const input = $("pointGoal");
+  if (document.activeElement !== input) input.value = g ? String(g) : "";
+  if (g) {
+    const e = RULES.lootEstimate(L, g);
+    $("lootOut").innerHTML = `На карте ≈ <b>${money(e.total)}</b><br><span class="muted">сдать всего ${money(e.quota)} (${e.count} × ${money(g)})</span>`;
+  } else {
+    $("lootOut").innerHTML = `<span class="muted">Выгрузок: ${RULES.extractionCount(L)} · лута до ${money(RULES.totalValueCap(L))}</span>`;
+  }
+}
+$("pointGoal").addEventListener("input", e => {
+  if (!inLevel()) return;
+  const v = Math.max(0, Math.floor(+e.target.value || 0));
+  H.run.level.pointGoal = v || null;
+  saveH(); renderLoot();
+});
+```
+
+Call `renderLoot();` at the end of `renderLevel()`. In `renderShop()`, inside the `$("shopForecast").innerHTML` template, add after the "Первые мобы" paragraph:
+
+```js
+    <p>Выгрузок: ${RULES.extractionCount(L)} · лута на карте до ${money(RULES.totalValueCap(L))}.</p>
+```
+
+- [ ] **Step 6: README** — add after the "Мобы (из кода игры)" section:
+
+```markdown
+## Лут на карте (из кода игры)
+
+- Квота забега = стоимость всех ценностей на карте × 0.7 × кривая уровня (0.4 на 1-м, 0.7 к 10-му, 1.0 к 20-му).
+- Квота каждой выгрузки = квота / число выгрузок (1 на 1-м уровне, 2 на 2–3, 3 на 4–5, 4 на 6–14, 5 с 15-го).
+- Введи квоту выгрузки на уровне — помощник покажет, сколько лута на карте.
+```
+
+- [ ] **Step 7: BROWSER CHECK**
+
+New run → set level 6 with the stepper in the shop → start level. Loot line without input: "Выгрузок: 4 · лута до $113 000" (ru-RU non-breaking spaces are fine). Type `5000` → "На карте ≈ $43 83x", "сдать всего $20 000 (4 × $5 000)". Typing digits in the field must not trigger box keys (`2` adds no box). Reload → value kept. Level done → shop for level 7 shows "Выгрузок: 4 · лута на карте до $130 000". Screenshots 1920 dark + 1100 light.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add rules.js tests/rules.test.js index.html helper.js README.md
+git commit -m "Estimate loot on the map from the extraction quota"
+```
