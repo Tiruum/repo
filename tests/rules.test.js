@@ -67,3 +67,32 @@ test("all extractions done resets cooldowns longer than 30 s", () => {
   assert.deepEqual(R.afterExtractions(200, 260, 100), { start: 100, end: 100 });  // surely >30 s: back now
   assert.deepEqual(R.afterExtractions(110, 170, 100), { start: 100, end: 130 });  // maybe: within 30 s
 });
+
+test("extraction points per level", () => {
+  const want = { 1: 1, 2: 2, 3: 2, 4: 3, 5: 3, 6: 4, 10: 4, 14: 4, 15: 5, 30: 5 };
+  for (const [lvl, n] of Object.entries(want)) assert.equal(R.extractionCount(+lvl), n, `level ${lvl}`);
+});
+
+test("haul goal curve: 0.4 on level 1, 0.7 → 1.0 over levels 11-20", () => {
+  close(R.haulCurve(1), 0.4, 1e-6);
+  close(R.haulCurve(10), 0.6994, 1e-3);
+  close(R.haulCurve(11), 0.73, 1e-3);
+  close(R.haulCurve(20), 1, 1e-6);
+  close(R.haulCurve(40), 1, 1e-6);
+});
+
+test("loot on the map from one extraction's goal", () => {
+  const mult = { 1: 3.571, 2: 4.760, 6: 8.766, 10: 8.170, 11: 7.828, 15: 8.403, 20: 7.143 };
+  for (const [lvl, m] of Object.entries(mult)) close(R.lootEstimate(+lvl, 1000).total / 1000, m, 0.01);
+  const e = R.lootEstimate(6, 5000);
+  assert.equal(e.count, 4);
+  assert.equal(e.quota, 20000);
+  close(e.total, 43830, 20);
+});
+
+test("valuable spawn budget cap", () => {
+  assert.equal(R.totalValueCap(1), 30000);
+  assert.equal(R.totalValueCap(10), 180000);
+  assert.equal(R.totalValueCap(11), 187000);
+  assert.equal(R.totalValueCap(20), 250000);
+});

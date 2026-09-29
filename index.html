@@ -243,6 +243,12 @@ body.has-summary[data-mode="idle"] .grid { grid-template-areas: "summary summary
 .coef-bar i { font-style: normal; text-align: center; font-size: 11px; padding: 4px 0; border-radius: 5px; background: var(--panel-2); color: var(--faint); }
 .coef-bar i.past { opacity: .45; }
 .coef-bar i.on { background: var(--primary); color: var(--primary-ink); font-weight: 600; }
+.loot { margin: 0 0 16px; }
+.loot label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+.loot input { width: 100%; font: 600 18px var(--display); color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; }
+.loot input:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
+.loot p { margin: 8px 0 0; font-size: 14px; }
+.loot p b { font-family: var(--display); font-size: 20px; }
 .first { font-size: 14px; margin: 0 0 16px; }
 .alarm { width: 100%; border: 1px solid color-mix(in srgb, var(--alarm) 55%, transparent); background: color-mix(in srgb, var(--alarm) 12%, transparent); color: var(--text); border-radius: 12px; padding: 12px 16px; cursor: pointer; font-weight: 600; display: flex; justify-content: center; gap: 10px; align-items: center; }
 .alarm:hover { background: color-mix(in srgb, var(--alarm) 20%, transparent); }
@@ -345,6 +351,11 @@ body.has-summary[data-mode="idle"] .grid { grid-template-areas: "summary summary
         <div class="coef-head"><span>Коэффициент возрождения</span><b class="num" id="coef">1.0</b></div>
         <div class="coef-bar" id="coefBar"></div>
         <span class="muted" id="coefNext"></span>
+      </div>
+      <div class="loot">
+        <label for="pointGoal">Квота выгрузки, $</label>
+        <input id="pointGoal" type="number" min="0" step="100" inputmode="numeric" placeholder="с экрана выгрузки">
+        <p id="lootOut"></p>
       </div>
       <p class="first" id="firstSpawn"></p>
       <button class="alarm" id="extract">Все выгрузки сданы <kbd>E</kbd></button>

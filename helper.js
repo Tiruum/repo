@@ -114,6 +114,25 @@ function renderHelper() {
   tick();
 }
 
+const money = n => "$" + Math.round(n).toLocaleString("ru-RU");
+function renderLoot() {
+  const lv = H.run.level, L = lv.number, g = lv.pointGoal;
+  const input = $("pointGoal");
+  if (document.activeElement !== input) input.value = g ? String(g) : "";
+  if (g) {
+    const e = RULES.lootEstimate(L, g);
+    $("lootOut").innerHTML = `На карте ≈ <b>${money(e.total)}</b><br><span class="muted">сдать всего ${money(e.quota)} (${e.count} × ${money(g)})</span>`;
+  } else {
+    $("lootOut").innerHTML = `<span class="muted">Выгрузок: ${RULES.extractionCount(L)} · лута ≈ ${money(RULES.totalValueCap(L))}+</span>`;
+  }
+}
+$("pointGoal").addEventListener("input", e => {
+  if (!inLevel()) return;
+  const v = Math.max(0, Math.floor(+e.target.value || 0));
+  H.run.level.pointGoal = v || null;
+  saveH(); renderLoot();
+});
+
 function renderShop() {
   const L = S.level, c = RULES.enemyCounts(L), f = RULES.firstSpawn(L);
   $("shopTitle").textContent = `Дальше уровень ${L}`;
@@ -123,6 +142,7 @@ function renderShop() {
     <div class="tsum">${c.map((n, i) => `<span class="t${i + 1}"><i></i>${"★".repeat(i + 1)} <b class="num">${n}</b></span>`).join("")}
       <span class="muted">всего <b class="num">${c[0] + c[1] + c[2]}</b> слотов</span></div>
     <p>Первые мобы через ${range(f.min, f.max)}${f.max > 5 ? `, в 20% случаев раньше: ${range(f.earlyMin, f.earlyMax)}` : ""}.</p>
+    <p>Выгрузок: ${RULES.extractionCount(L)} · лута на карте ≈ ${money(RULES.totalValueCap(L))}+ (игра докладывает ценности, пока сумма не превысит эту планку).</p>
     <p class="muted">Gnome приходят пачкой по 4, Banger по 3. ${L < 3 ? "Loom появляется с 3-го уровня." : ""}</p>
     ${L <= 3 && H.settings.groups ? `<p class="warn">Слот 3★ может оказаться группой: до 10 мобов сразу.</p>` : ""}`;
 }
@@ -142,6 +162,7 @@ function renderLevel() {
       ${cards || adds ? `<div class="cards">${cards}${adds}</div>` : ""}</div>`;
   }).join("");
   $("mobsHint").textContent = numbered.length ? "Shift+номер — убит" : "";
+  renderLoot();
 }
 
 function card(e, n) {

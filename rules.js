@@ -66,11 +66,11 @@ function forecast(level, bad, h = 5) {
 
   // First spawn pause: 60 × U(2,3) × spawnIdlePauseCurve(lc/9); 20%: × U(0.1, 0.25); min 5 s.
   const IDLE_KEYS = [
-    { t: 0, v: 1, s: 0.0008574398816563189 },
-    { t: 0.5, v: 0.20000000298023224, s: 0.00043129612458869815 },
-    { t: 1, v: 0, s: -1.491617202758789 },
+    { t: 0, v: 1, in: 0.0008574398816563189, out: 0.0008574398816563189 },
+    { t: 0.5, v: 0.20000000298023224, in: 0.00043129612458869815, out: 0.00043129612458869815 },
+    { t: 1, v: 0, in: -1.491617202758789, out: -1.491617202758789 },
   ];
-  function hermite(keys, t) {                    // Unity AnimationCurve with in = out tangents
+  function hermite(keys, t) {                    // Unity AnimationCurve (non-weighted tangents)
     if (t <= keys[0].t) return keys[0].v;
     const last = keys[keys.length - 1];
     if (t >= last.t) return last.v;
@@ -78,7 +78,7 @@ function forecast(level, bad, h = 5) {
       const a = keys[i], b = keys[i + 1];
       if (t > b.t) continue;
       const dt = b.t - a.t, s = (t - a.t) / dt, s2 = s * s, s3 = s2 * s;
-      return (2 * s3 - 3 * s2 + 1) * a.v + (s3 - 2 * s2 + s) * a.s * dt + (-2 * s3 + 3 * s2) * b.v + (s3 - s2) * b.s * dt;
+      return (2 * s3 - 3 * s2 + 1) * a.v + (s3 - 2 * s2 + s) * a.out * dt + (-2 * s3 + 3 * s2) * b.v + (s3 - s2) * b.in * dt;
     }
     return last.v;
   }
@@ -102,7 +102,40 @@ function forecast(level, bad, h = 5) {
     return { start: x, end: Math.min(end, x + EXTRACT_CAP) };
   }
 
+  /* ----- loot: RoundDirector.StartRound, ExtractionPoint.StateActive, LevelGenerator.TileGeneration ----- */
+  // Run quota = int(sum of valuables at spawn × 0.7 × haulCurve); each extraction's goal = quota / count.
+  const HAUL_1 = [
+    { t: 0, v: 0.4000000059604645, in: 0.0006335551152005792, out: 0.0006335551152005792 },
+    { t: 0.10000000149011612, v: 0.6000000238418579, in: 0.012308282777667046, out: 0.012308282777667046 },
+    { t: 1.00152587890625, v: 0.6994247436523438, in: 0, out: 0 },
+  ];
+  const HAUL_2 = [
+    { t: 0, v: 0.699999988079071, in: 0.0006335551152005792, out: 0.30000001192092896 },
+    { t: 1, v: 1, in: 0.30000001192092896, out: 0 },
+  ];
+  const HAUL_SHARE = 0.7;
+  function haulCurve(level) {
+    const lc = level - 1, m2 = clamp01((lc - 9) / 10);
+    return m2 > 0 ? hermite(HAUL_2, m2) : hermite(HAUL_1, clamp01(lc / 9));
+  }
+  // LevelGenerator: modules = min(5 + lc, 10) (+ up to 5 more after level 10); ExtractionAmount by modules, +1 point.
+  function extractionCount(level) {
+    const lc = level - 1, modules = Math.min(5 + lc, 10) + (lc >= 10 ? Math.min(lc - 9, 5) : 0);
+    return 1 + (modules >= 15 ? 4 : modules >= 10 ? 3 : modules >= 8 ? 2 : modules >= 6 ? 1 : 0);
+  }
+  function lootEstimate(level, pointGoal) {
+    const count = extractionCount(level), quota = pointGoal * count;
+    return { total: quota / (HAUL_SHARE * haulCurve(level)), quota, count };
+  }
+  // ValuableDirector.totalMaxValue (spawn budget, thousands): 30 → 180 over levels 1-10, 180 → 250 over 11-20.
+  // Spawning stops once the running total exceeds it, so the real total is usually a bit above (live: cap 30K, loot 31.3K).
+  function totalValueCap(level) {
+    const lc = level - 1, m2 = clamp01((lc - 9) / 10);
+    return 1000 * (m2 > 0 ? Math.round(180 + 70 * m2) : Math.round(30 + 150 * clamp01(lc / 9)));
+  }
+
   return { LEVEL_LOOP, LOOPS_MAX, BAD_LUCK_BONUS, slotTs, spawnChance, rarityOdds, levelOdds, atLeast, forecast,
-    enemyCounts, firstSpawn, respawnCoef, nextCoefDrop, respawnWindow, afterExtractions, ORBS_MAX, COEF_PERIOD };
+    enemyCounts, firstSpawn, respawnCoef, nextCoefDrop, respawnWindow, afterExtractions, ORBS_MAX, COEF_PERIOD,
+    haulCurve, extractionCount, lootEstimate, totalValueCap };
 })();
 if (typeof module === "object") module.exports = RULES;
