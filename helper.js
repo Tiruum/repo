@@ -25,7 +25,7 @@ const iconSvg = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
 /* ----- hooks into app.js ----- */
 extra = { get: () => H, set: h => { if (h) { H = h; saveH(); } } };
 inLevel = () => mode() === "level";
-keysBlocked = () => mode() === "shop";
+keysBlocked = () => mode() === "shop" || !!document.querySelector("dialog[open]");
 onRecorded = boxes => { if (inLevel()) { RUN.endLevel(H.run, boxes, now()); saveH(); } };
 afterRender = () => renderHelper();
 
@@ -128,11 +128,89 @@ function renderShop() {
 }
 
 function renderLevel() {
-  const lv = H.run.level;
+  const lv = H.run.level, counts = RULES.enemyCounts(lv.number);
   $("lvlTitle").textContent = `Уровень ${lv.number}`;
   $("extract").disabled = lv.extractionsAt !== null;
   $("extractBanner").hidden = lv.extractionsAt === null;
+  const tierOf = e => lv.picks.find(p => p.pick === e.pick).tier;
+  numbered = [];
+  $("tiers").innerHTML = [1, 2, 3].map(t => {
+    const used = lv.picks.filter(p => p.tier === t).length, free = Math.max(0, counts[t - 1] - used);
+    const cards = lv.enemies.filter(e => tierOf(e) === t).map(e => { numbered.push(e.uid); return card(e, numbered.length); }).join("");
+    const adds = Array.from({ length: free }, () => `<button class="slot-add t${t}" data-open="${t}">+ кто появился?</button>`).join("");
+    return `<div class="tier t${t}"><div class="th"><b>${"★".repeat(t)}</b><span>${counts[t - 1] ? `${used} из ${counts[t - 1]}` : "на этом уровне нет"}</span></div>
+      ${cards || adds ? `<div class="cards">${cards}${adds}</div>` : ""}</div>`;
+  }).join("");
+  $("mobsHint").textContent = numbered.length ? "Shift+номер — убит" : "";
 }
+
+function card(e, n) {
+  const d = ENEMIES[e.id];
+  return `<article class="mob t${d.tier}" data-uid="${e.uid}" data-st="alive">
+    <div class="mh"><span class="ic">${iconSvg(d)}</span><b>${d.name}</b>${n <= 9 ? `<kbd title="Shift+${n}: убит">⇧${n}</kbd>` : ""}</div>
+    <div class="ms"><span>HP <b class="num">${d.hp}</b></span>
+      <span title="${d.dmg.length ? "урон по игроку за удар" : "урон зависит от атаки"}">урон <b class="num">${d.dmg.length ? d.dmg.join(" / ") : "—"}</b></span>
+      ${oneShot(d) ? `<span class="one">убивает с удара</span>` : ""}</div>
+    ${d.desc ? `<p class="md">${d.desc}</p>` : ""}
+    <div class="mt" data-timer="${e.uid}"></div>
+    <div class="ma"><button class="kill" data-kill="${e.uid}">Убит</button>
+      <span class="orbs" title="Орбов выпало с этого моба, максимум 3 за уровень">орбы ${e.orbs}/3</span>
+      <button class="rm" data-rm="${e.uid}" aria-label="Убрать ${d.name}">Убрать</button></div>
+  </article>`;
+}
+
+function timerText(e, st, t) {
+  if (st === "alive") return "";
+  if (st === "cooldown") return `<span class="cd">вернётся через <b class="num">${range((e.start - t) / 1000, (e.end - t) / 1000)}</b></span>`;
+  if (st === "window") {
+    const p = (t - e.start) / Math.max(1, e.end - e.start);
+    return `<span class="win">может вернуться · окно до <b class="num">${clock(Math.ceil((e.end - t) / 1000))}</b></span><span class="bar"><i style="width:${(p * 100).toFixed(1)}%"></i></span>`;
+  }
+  return `<span class="back">может быть на карте</span>`;
+}
+
+function tickEnemies(t) {
+  let nearest = null;
+  for (const e of H.run.level.enemies) {
+    const st = RUN.status(e, t);
+    const box = document.querySelector(`.mob[data-uid="${e.uid}"]`);
+    if (box) {
+      box.dataset.st = st;
+      const tm = box.querySelector(".mt"), html = timerText(e, st, t);
+      if (tm.innerHTML !== html) tm.innerHTML = html;
+      box.querySelector(".kill").disabled = st === "cooldown";
+    }
+    if (e.start !== null) {
+      if (lastTick < e.start - 10000 && e.start - 10000 <= t && e.start - e.killedAt > 10000) beep(880, 0.12, 1);
+      if (lastTick < e.start && e.start <= t) beep(1175, 0.18, 2);
+    }
+    if (st === "cooldown" && (!nearest || e.start < nearest.start)) nearest = e;
+  }
+  if (nearest) document.title = `⏱ ${ENEMIES[nearest.id].name} ${clock(Math.ceil((nearest.start - t) / 1000))}`;
+}
+
+function openPicker(tier) {
+  if (!inLevel()) return;
+  const lv = H.run.level, seen = RUN.seenCounts(H.run);
+  $("pickerTitle").textContent = `${"★".repeat(tier)}: кто появился на уровне ${lv.number}?`;
+  $("pickerGrid").innerHTML = enemyPool(tier, lv.number, H.settings.groups).map(s => {
+    const d = ENEMIES[s.members[0][0]], was = seen[s.members[0][0]];
+    return `<button class="t${tier}" data-pick="${s.id}"><span class="ic">${iconSvg(d)}</span>
+      <span>${setupLabel(s)}${was ? `<small>уже был в забеге: реже выпадает</small>` : ""}</span></button>`;
+  }).join("");
+  $("picker").showModal();
+}
+function pickSetup(id) {
+  remember();
+  if (RUN.addPick(H.run, id) === null) { undoStack.pop(); return; }
+  saveH(); $("picker").close(); render();
+}
+function killEnemy(uid) {
+  remember();
+  if (!RUN.kill(H.run, uid, now())) { undoStack.pop(); return; }
+  saveH(); render();
+}
+function removeEnemyH(uid) { remember(); RUN.removeEnemy(H.run, uid); saveH(); render(); }
 
 function renderSummary(r) {
   const byR = [0, 0, 0, 0]; r.boxes.forEach(b => byR[b]++);
@@ -172,7 +250,6 @@ function tick() {
   tickEnemies(t);
   lastTick = t;
 }
-function tickEnemies(t) {}              // filled in Task 7
 
 /* ----- events ----- */
 $("newRun").addEventListener("click", newRunH);
@@ -187,8 +264,22 @@ document.addEventListener("click", e => {
   const a = document.activeElement;
   if (a && a !== document.body && a.matches("button") && !a.closest("dialog, .menu")) a.blur();
 });
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-open],[data-pick],[data-kill],[data-rm]");
+  if (!t) return;
+  if (t.dataset.open) openPicker(+t.dataset.open);
+  else if (t.dataset.pick) pickSetup(t.dataset.pick);
+  else if (t.dataset.kill) killEnemy(+t.dataset.kill);
+  else if (t.dataset.rm) removeEnemyH(+t.dataset.rm);
+});
+$("pickerClose").addEventListener("click", () => $("picker").close());
 document.addEventListener("keydown", e => {
-  if (e.target.closest("input, textarea, summary, dialog") || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+  if (e.target.closest("input, textarea, summary, dialog") || document.querySelector("dialog[open]") || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.shiftKey) {
+    const m = /^Digit([1-9])$/.exec(e.code);
+    if (m && inLevel() && numbered[+m[1] - 1]) { e.preventDefault(); killEnemy(numbered[+m[1] - 1]); }
+    return;
+  }
   if (e.code === "KeyS") startLevel();
   else if (e.code === "KeyE") extractionsDone();
   else if (e.code === "KeyM") toggleSound();
