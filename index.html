@@ -240,7 +240,6 @@ body.has-summary[data-mode="idle"] .grid { grid-template-areas: "summary summary
 .lk i { font-style: normal; color: var(--tc); letter-spacing: .08em; min-width: 3.2em; }
 .lk b { font-size: 14px; }
 .lk small { flex-basis: 100%; padding-left: calc(3.2em + 14px); font-size: 12.5px; color: var(--muted); }
-.warn { color: var(--t2); }
 .check { display: flex; gap: 8px; align-items: center; margin-top: 14px; font-size: 13.5px; color: var(--muted); cursor: pointer; }
 .clock > b { display: block; font-size: 64px; font-weight: 700; line-height: 1; letter-spacing: -.02em; }
 .clock span { font-size: 13px; color: var(--muted); }
@@ -257,7 +256,11 @@ body.has-summary[data-mode="idle"] .grid { grid-template-areas: "summary summary
 .loot input:focus { outline: 2px solid var(--focus); outline-offset: 1px; }
 .loot p { margin: 8px 0 0; font-size: 14px; }
 .loot p b { font-family: var(--display); font-size: 20px; }
-.first { font-size: 14px; margin: 0 0 16px; }
+.first { font-size: 14px; margin: -4px 0 16px; padding: 10px 12px; border-radius: 12px; background: var(--panel-2); }
+.first b { font-size: 16px; }
+.first.now { color: var(--t2); }
+.first .bar { display: block; height: 4px; border-radius: 2px; background: var(--line); margin-top: 8px; overflow: hidden; }
+.first .bar i { display: block; height: 100%; background: currentColor; }
 .alarm { width: 100%; border: 1px solid color-mix(in srgb, var(--alarm) 55%, transparent); background: color-mix(in srgb, var(--alarm) 12%, transparent); color: var(--text); border-radius: 12px; padding: 12px 16px; cursor: pointer; font-weight: 600; display: flex; justify-content: center; gap: 10px; align-items: center; }
 .alarm:hover { background: color-mix(in srgb, var(--alarm) 20%, transparent); }
 .alarm:disabled { opacity: .4; cursor: default; }
@@ -352,7 +355,7 @@ body.has-summary[data-mode="idle"] .grid { grid-template-areas: "summary summary
         <div class="clock-sm"><span>забег</span><b class="num" id="runClockShop">0:00</b></div>
       </div>
       <div id="shopForecast"></div>
-      <label class="check"><input type="checkbox" id="groups"> Сыграно 5+ забегов: на уровнях 1–3 в слот 3★ может выпасть группа</label>
+      <label class="check" id="groupsRow" title="С 5 сыгранных забегов на уровнях 1–3 в слот 3★ может выпасть группа мобов (например, 10 Gnome)"><input type="checkbox" id="groups"> Сыграно 5+ забегов</label>
     </section>
 
     <section class="panel lvlp" id="lvlp" aria-label="Уровень" hidden>
@@ -368,13 +371,13 @@ body.has-summary[data-mode="idle"] .grid { grid-template-areas: "summary summary
         <input id="pointGoal" type="number" min="0" step="100" inputmode="numeric" placeholder="с экрана выгрузки">
         <p id="lootOut"></p>
       </div>
-      <p class="first" id="firstSpawn"></p>
       <button class="alarm" id="extract">Все выгрузки сданы <kbd>E</kbd></button>
       <p class="banner" id="extractBanner" hidden>Выгрузки сданы: мобы идут в комнаты игроков, возрождение почти мгновенное.</p>
     </section>
 
     <section class="panel mobs" id="mobs" aria-label="Мобы" hidden>
       <h2>Мобы <span id="mobsHint"></span></h2>
+      <p class="first" id="firstSpawn" title="В 20% случаев игра сокращает паузу в 4–10 раз, так что мобы могут прийти раньше" hidden></p>
       <div id="tiers"></div>
     </section>
 

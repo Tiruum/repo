@@ -144,24 +144,23 @@ function likelyEnemies(L, counts) {
     const n = counts[t - 1], odds = RUN.pickOdds(H.run, t, L, H.settings.groups);
     const top = odds.slice(0, 4).map(o => `<span>${setupLabel(o.setup)} <b class="num">${oddsText(1 - (1 - o.p) ** n)}</b></span>`).join("");
     const rare = odds.filter(o => o.recent).map(o => setupLabel(o.setup));
-    return `<div class="lk t${t}"><i>${"★".repeat(t)}</i>${top}${rare.length ? `<small>реже: ${rare.join(", ")}</small>` : ""}</div>`;
+    const group = t === 3 && L <= 3 && H.settings.groups ? "может выпасть группа до 10 мобов" : "";
+    const notes = [rare.length ? `реже: ${rare.join(", ")}` : "", group].filter(Boolean).join(" · ");
+    return `<div class="lk t${t}"><i>${"★".repeat(t)}</i>${top}${notes ? `<small>${notes}</small>` : ""}</div>`;
   }).join("");
 }
 
 function renderShop() {
-  const L = S.level, c = RULES.enemyCounts(L), f = RULES.firstSpawn(L);
+  const L = S.level, c = RULES.enemyCounts(L);
   $("shopTitle").innerHTML = `Дальше уровень <span class="stepper"><button data-step="level:-1" aria-label="Уровень меньше">−</button><output class="num">${L}</output><button data-step="level:1" aria-label="Уровень больше">+</button></span>`;
   $("startLevel").innerHTML = `Начать уровень ${L} <kbd>S</kbd>`;
   $("groups").checked = H.settings.groups;
+  $("groupsRow").hidden = L > 3;                      // groups only exist on levels 1-3
   $("shopForecast").innerHTML = `
     <div class="tsum">${c.map((n, i) => `<span class="t${i + 1}"><i></i>${"★".repeat(i + 1)} <b class="num">${n}</b></span>`).join("")}
       <span class="muted">всего <b class="num">${c[0] + c[1] + c[2]}</b> слотов</span></div>
-    <div class="likely">${likelyEnemies(L, c)}</div>
-    <p class="muted">Шансы по правилам игры: мобы с прошлых уровней выпадают реже. Точнее всего, если отмечаешь всех мобов.</p>
-    <p>Первые мобы через ${range(f.min, f.max)}${f.max > 5 ? `, в 20% случаев раньше: ${range(f.earlyMin, f.earlyMax)}` : ""}.</p>
-    <p>Выгрузок: ${RULES.extractionCount(L)} · лута на карте ≈ ${money(RULES.totalValueCap(L))}+ (игра докладывает ценности, пока сумма не превысит эту планку).</p>
-    <p class="muted">Gnome приходят пачкой по 4, Banger по 3. ${L < 3 ? "Loom появляется с 3-го уровня." : ""}</p>
-    ${L <= 3 && H.settings.groups ? `<p class="warn">Слот 3★ может оказаться группой: до 10 мобов сразу.</p>` : ""}`;
+    <div class="likely" title="Шанс увидеть моба хотя бы раз, по правилам игры: мобы с прошлых уровней выпадают реже. Точнее всего, если отмечаешь всех мобов.">${likelyEnemies(L, c)}</div>
+    <p class="muted" title="Игра раскладывает ценности, пока их сумма не превысит планку уровня, так что лута обычно чуть больше">Выгрузок: ${RULES.extractionCount(L)} · лута ≈ ${money(RULES.totalValueCap(L))}+</p>`;
 }
 
 function renderLevel() {
@@ -293,9 +292,15 @@ function tick() {
   put("coef", coef.toFixed(1));
   put("coefNext", done ? "выгрузки сданы: возрождение 1 с" : nd === null ? "минимум: возрождение 1 с" : `→ ${(coef - 0.2).toFixed(1)} через ${clock(Math.ceil(nd))}`);
   put("coefBar", [1, 0.8, 0.6, 0.4, 0.2, 0].map(v => `<i class="${Math.abs(v - coef) < 1e-9 ? "on" : v > coef ? "past" : ""}">${v.toFixed(1)}</i>`).join(""));
-  const f = RULES.firstSpawn(lv.number);
-  put("firstSpawn", sec < f.min ? `Первые мобы через ${range(f.min - sec, f.max - sec)} (в 20% случаев раньше)`
-    : sec < f.max ? `Первые мобы появляются: ещё до ${clock(Math.ceil(f.max - sec))}` : "Мобы уже на карте");
+  // first-spawn countdown sits over the enemy slots, where the player looks when mobs show up
+  const f = RULES.firstSpawn(lv.number), fs = $("firstSpawn");
+  fs.hidden = sec >= f.max;
+  if (!fs.hidden) {
+    fs.classList.toggle("now", sec >= f.min);
+    put("firstSpawn", (sec < f.min ? `Первые мобы через <b class="num">${range(f.min - sec, f.max - sec)}</b>`
+      : `Мобы появляются · до <b class="num">${clock(Math.ceil(f.max - sec))}</b>`)
+      + `<span class="bar"><i style="width:${(Math.min(1, sec / f.max) * 100).toFixed(1)}%"></i></span>`);
+  }
   for (let k = 1; k <= 5 && !done; k++) {
     const at = lv.startedAt + k * RULES.COEF_PERIOD * 1000;
     if (lastTick < at && at <= t) beep(660, 0.15, 3);
